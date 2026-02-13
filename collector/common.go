@@ -1,48 +1,17 @@
 package collector
 
-import (
-	"context"
-	"encoding/json"
-	"errors"
-)
+import common "github.com/melonattacker/agentlogix/collector/common"
 
 const (
-	EventTypeExec = "exec"
-	EventTypeFile = "file"
-	EventTypeNet  = "net"
+	EventTypeExec = common.EventTypeExec
+	EventTypeFile = common.EventTypeFile
+	EventTypeNet  = common.EventTypeNet
 )
 
-var ErrLinuxOnly = errors.New("agentlogix collector is only supported on linux")
+var ErrLinuxOnly = common.ErrLinuxOnly
 
-type Event struct {
-	Type      string          `json:"type"`
-	Timestamp string          `json:"timestamp"`
-	PID       int             `json:"pid,omitempty"`
-	PPID      int             `json:"ppid,omitempty"`
-	UID       int             `json:"uid,omitempty"`
-	Detail    json.RawMessage `json:"detail"`
-}
-
-type Config struct {
-	EnableExec   bool
-	EnableFile   bool
-	EnableNet    bool
-	WatchPaths   []string
-	ArgvMax      int
-	ArgvMaxBytes int
-	HashMaxBytes int64
-}
-
-type Collector interface {
-	Init(ctx context.Context) error
-	Start(ctx context.Context, out chan<- Event) error
-	Stop(ctx context.Context) error
-}
-
-type TargetSetter interface {
-	SetTargetPID(pid int)
-}
-
-type ChildWaiter interface {
-	WaitForIdle(ctx context.Context) error
-}
+type Event = common.Event
+type Config = common.Config
+type Collector = common.Collector
+type TargetSetter = common.TargetSetter
+type ChildWaiter = common.ChildWaiter

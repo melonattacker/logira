@@ -45,11 +45,12 @@ func TestSummarizeJSON(t *testing.T) {
 	}
 
 	buf, restore := captureStdout(t)
-	defer restore()
 
 	if err := SummarizeCommand(context.Background(), []string{"--log", logPath, "--json"}); err != nil {
+		restore()
 		t.Fatalf("SummarizeCommand: %v", err)
 	}
+	restore()
 
 	var out summaryOut
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {

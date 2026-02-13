@@ -7,16 +7,18 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/melonattacker/agentlogix/collector"
+	collector "github.com/melonattacker/agentlogix/collector/common"
 	"github.com/melonattacker/agentlogix/internal/model"
 )
 
@@ -77,10 +79,21 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 
 	objPath := os.Getenv("AGENTLOGIX_EXEC_BPF_OBJ")
 	if objPath == "" {
-		objPath = firstExistingPath(
+		tried := []string{
 			filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
 			filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
-		)
+		}
+		objPath = firstExistingPath(tried...)
+		if objPath == "" {
+			return nil, fmt.Errorf(
+				"exec bpf object not found (tried %s). Run `make generate` to create it, or set AGENTLOGIX_EXEC_BPF_OBJ to an existing .o",
+				strings.Join(tried, ", "),
+			)
+		}
+	} else {
+		if _, err := os.Stat(objPath); err != nil {
+			return nil, fmt.Errorf("exec bpf object %s: %w", objPath, err)
+		}
 	}
 
 	spec, err := ebpf.LoadCollectionSpec(objPath)
@@ -160,7 +173,7 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 
 		rec, err := t.reader.Read()
 		if err != nil {
-			if ringbuf.IsClosed(err) || ctx.Err() != nil {
+			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
 			}
 			continue
@@ -228,7 +241,7 @@ func (t *Tracer) Stop(ctx context.Context) error {
 		_ = l.Close()
 	}
 	if coll != nil {
-		_ = coll.Close()
+		coll.Close()
 	}
 
 	done := make(chan struct{})
@@ -255,9 +268,12 @@ func cString(b []byte) string {
 
 func firstExistingPath(paths ...string) string {
 	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	return paths[0]
+	return ""
 }

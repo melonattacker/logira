@@ -44,7 +44,7 @@ All output is **JSONL** (one JSON object per line) suitable for auditing.
 
 ### Linux exec tracer
 
-- BPF C: `collector/linux/exec/trace.bpf.c`
+- BPF C: `collector/linux/exec/_trace.bpf.c`
 - Hooks:
   - `tracepoint/sched/sched_process_exec` (required)
   - `tracepoint/syscalls/sys_enter_execve`
@@ -56,7 +56,7 @@ All output is **JSONL** (one JSON object per line) suitable for auditing.
 
 ### Linux net tracer
 
-- BPF C: `collector/linux/net/trace.bpf.c`
+- BPF C: `collector/linux/net/_trace.bpf.c`
 - Hooks:
   - connect: `sys_enter_connect`, `sys_exit_connect`
   - send: `sys_enter_sendto/sys_exit_sendto`, `sys_enter_sendmsg/sys_exit_sendmsg`

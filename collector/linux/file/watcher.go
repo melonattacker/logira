@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/melonattacker/agentlogix/collector"
+	collector "github.com/melonattacker/agentlogix/collector/common"
 	"github.com/melonattacker/agentlogix/internal/model"
 )
 
@@ -75,14 +75,21 @@ func (w *Watcher) Init(ctx context.Context) error {
 }
 
 func (w *Watcher) Start(ctx context.Context) (<-chan collector.Event, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.started {
 		return nil, fmt.Errorf("file watcher already started")
 	}
 
+	// Don't hold w.mu while initializing watchers: startInotify walks directories and
+	// addInotifyWatch also takes w.mu, which would deadlock.
+	w.mu.Lock()
+	w.started = true
+	w.mu.Unlock()
+
 	if fanErr := w.startFanotify(); fanErr != nil {
 		if inoErr := w.startInotify(); inoErr != nil {
+			w.mu.Lock()
+			w.started = false
+			w.mu.Unlock()
 			return nil, fmt.Errorf("fanotify failed: %v; inotify failed: %w", fanErr, inoErr)
 		}
 		w.mode = "inotify"
@@ -90,12 +97,15 @@ func (w *Watcher) Start(ctx context.Context) (<-chan collector.Event, error) {
 		w.mode = "fanotify"
 	}
 
-	w.out = make(chan collector.Event, 2048)
-	w.started = true
+	out := make(chan collector.Event, 2048)
+	w.mu.Lock()
+	w.out = out
+	w.mu.Unlock()
+
 	w.runWG.Add(1)
 	go func() {
 		defer w.runWG.Done()
-		defer close(w.out)
+		defer close(out)
 		switch w.mode {
 		case "fanotify":
 			w.runFanotify(ctx)
@@ -104,7 +114,7 @@ func (w *Watcher) Start(ctx context.Context) (<-chan collector.Event, error) {
 		}
 	}()
 
-	return w.out, nil
+	return out, nil
 }
 
 func (w *Watcher) Stop(ctx context.Context) error {
@@ -160,6 +170,8 @@ func (w *Watcher) startFanotify() error {
 }
 
 func (w *Watcher) runFanotify(ctx context.Context) {
+	const fanMetaSize = int(unsafe.Sizeof(unix.FanotifyEventMetadata{}))
+
 	buf := make([]byte, 256*1024)
 	for {
 		select {
@@ -181,16 +193,16 @@ func (w *Watcher) runFanotify(ctx context.Context) {
 		}
 
 		offset := 0
-		for offset+unix.SizeofFanotifyEventMetadata <= n {
+		for offset+fanMetaSize <= n {
 			meta := (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[offset]))
-			if int(meta.Event_len) < unix.SizeofFanotifyEventMetadata {
+			if int(meta.Event_len) < fanMetaSize {
 				break
 			}
 
 			path := ""
 			if meta.Fd >= 0 {
 				path = w.fdPath(meta.Fd)
-				_ = unix.Close(meta.Fd)
+				_ = unix.Close(int(meta.Fd))
 			}
 
 			op := fanMaskToOp(meta.Mask)
@@ -214,6 +226,7 @@ func (w *Watcher) startInotify() error {
 	for _, root := range w.cfg.WatchPaths {
 		if err := w.addInotifyRecursive(root); err != nil {
 			_ = unix.Close(fd)
+			w.inoFD = -1
 			return err
 		}
 	}

@@ -16,7 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/melonattacker/agentlogix/collector"
+	"github.com/cilium/ebpf/rlimit"
+	collector "github.com/melonattacker/agentlogix/collector/common"
 	exectrace "github.com/melonattacker/agentlogix/collector/linux/exec"
 	filewatcher "github.com/melonattacker/agentlogix/collector/linux/file"
 	nettrace "github.com/melonattacker/agentlogix/collector/linux/net"
@@ -31,8 +32,10 @@ type LinuxCollector struct {
 
 	rootPID atomic.Int32
 
-	mu      sync.Mutex
-	tracked map[int]struct{}
+	mu       sync.Mutex
+	tracked  map[int]struct{}
+	out      chan<- collector.Event
+	bootExec []collector.Event
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -56,6 +59,14 @@ func NewCollector(cfg collector.Config) *LinuxCollector {
 }
 
 func (lc *LinuxCollector) Init(ctx context.Context) error {
+	if lc.cfg.EnableExec || lc.cfg.EnableNet {
+		// eBPF map creation is constrained by RLIMIT_MEMLOCK on many systems.
+		// This typically requires root or CAP_SYS_RESOURCE.
+		if err := rlimit.RemoveMemlock(); err != nil {
+			return fmt.Errorf("remove memlock rlimit (try sudo): %w", err)
+		}
+	}
+
 	if lc.cfg.EnableExec {
 		lc.execTracer = exectrace.NewTracer(exectrace.Config{ArgvMax: lc.cfg.ArgvMax, ArgvMaxBytes: lc.cfg.ArgvMaxBytes})
 		if err := lc.execTracer.Init(ctx); err != nil {
@@ -80,6 +91,9 @@ func (lc *LinuxCollector) Init(ctx context.Context) error {
 func (lc *LinuxCollector) Start(ctx context.Context, out chan<- collector.Event) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	lc.cancel = cancel
+	lc.mu.Lock()
+	lc.out = out
+	lc.mu.Unlock()
 
 	if lc.execTracer != nil {
 		execCh, err := lc.execTracer.Start(runCtx)
@@ -142,20 +156,14 @@ func (lc *LinuxCollector) Stop(ctx context.Context) error {
 	if lc.cancel != nil {
 		lc.cancel()
 	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		lc.wg.Wait()
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-done:
-	}
+	lc.mu.Lock()
+	lc.out = nil
+	lc.bootExec = nil
+	lc.mu.Unlock()
 
 	var errs []error
+	// Stop underlying readers first so their output channels close and the
+	// forwarding goroutines in lc.wg can exit without deadlocking.
 	if lc.execTracer != nil {
 		if err := lc.execTracer.Stop(ctx); err != nil {
 			errs = append(errs, err)
@@ -171,6 +179,18 @@ func (lc *LinuxCollector) Stop(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		lc.wg.Wait()
+	}()
+
+	select {
+	case <-ctx.Done():
+		errs = append(errs, ctx.Err())
+	case <-done:
+	}
 	return errors.Join(errs...)
 }
 
@@ -180,6 +200,18 @@ func (lc *LinuxCollector) SetTargetPID(pid int) {
 	}
 	lc.rootPID.Store(int32(pid))
 	lc.trackPID(pid)
+
+	lc.mu.Lock()
+	pending := lc.bootExec
+	lc.bootExec = nil
+	out := lc.out
+	lc.mu.Unlock()
+
+	if out != nil {
+		for _, ev := range pending {
+			lc.handleEvent(out, ev)
+		}
+	}
 }
 
 func (lc *LinuxCollector) WaitForIdle(ctx context.Context) error {
@@ -201,6 +233,18 @@ func (lc *LinuxCollector) WaitForIdle(ctx context.Context) error {
 func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.Event) {
 	if ev.Timestamp == "" {
 		ev.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
+	// During bootstrap we don't yet know the target PID. Buffer early exec events
+	// so we don't race and drop the target's initial sched_process_exec event.
+	if ev.Type == collector.EventTypeExec && ev.PID > 0 && lc.rootPID.Load() <= 0 {
+		lc.mu.Lock()
+		if lc.rootPID.Load() <= 0 && len(lc.bootExec) < 512 {
+			lc.bootExec = append(lc.bootExec, ev)
+			lc.mu.Unlock()
+			return
+		}
+		lc.mu.Unlock()
 	}
 
 	if ev.PID > 0 && !lc.isRelevantPID(ev.PID) {

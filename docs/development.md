@@ -8,6 +8,7 @@ This doc is for contributors.
 - Root (or appropriate capabilities) to run tracers
 - Go 1.22+
 - clang/llvm to regenerate eBPF objects
+- Linux UAPI headers (if you see missing `asm/types.h`, install your distro's libc/kernel headers packages)
 
 ## Build
 
@@ -21,7 +22,7 @@ make build
 make generate
 ```
 
-This uses `bpf2go` and produces `trace_bpfel.o`/`trace_bpfeb.o` plus generated Go files.
+This uses `bpf2go` and produces `trace_bpfel.o`/`trace_bpfeb.o` plus generated Go files. The BPF C inputs are named with a leading underscore (e.g. `_trace.bpf.c`) so `go build` ignores them.
 Commit the generated artifacts so end users do not need clang.
 
 ## Tests

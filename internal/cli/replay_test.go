@@ -28,11 +28,12 @@ func TestReplaySortsAcrossFiles(t *testing.T) {
 	_ = wb.Close()
 
 	buf, restore := captureStdout(t)
-	defer restore()
 
 	if err := ReplayCommand(context.Background(), []string{"--log", dir}); err != nil {
+		restore()
 		t.Fatalf("ReplayCommand: %v", err)
 	}
+	restore()
 
 	got := []collector.Event{}
 	s := bufio.NewScanner(bytes.NewReader(buf.Bytes()))
