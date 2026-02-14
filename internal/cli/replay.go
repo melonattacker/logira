@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +16,7 @@ import (
 
 // ReplayCommand is deprecated. Use `logira query`.
 func ReplayCommand(ctx context.Context, args []string) error {
-	fmt.Fprintln(os.Stderr, "warning: 'replay' is deprecated; use 'query' instead")
-
-	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("replay", args, replayUsage)
 
 	var logPath string
 	var pretty bool
@@ -27,6 +25,8 @@ func ReplayCommand(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	fmt.Fprintln(os.Stderr, "warning: 'replay' is deprecated; use 'query' instead")
 
 	sel := "last"
 	if strings.TrimSpace(logPath) != "" {
@@ -98,4 +98,24 @@ func replayJSONLFile(path string, pretty bool) error {
 		}
 	}
 	return nil
+}
+
+func replayUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s replay: (deprecated) backward wrapper for '%s query'\n\n", prog, prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s replay [--pretty] [--log <file|dir|run-id>]\n\n", prog)
+
+	fmt.Fprintln(w, "Notes:")
+	fmt.Fprintln(w, "  This command is deprecated; use 'query' instead.")
+	fmt.Fprintln(w, "  --log accepts a v2 run directory/id, or a legacy log file/dir.")
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s replay --log last\n", prog)
+	fmt.Fprintf(w, "  %s replay --log ~/.logira/runs/<run-id>/\n", prog)
+	fmt.Fprintf(w, "  %s replay --log ./events.jsonl --pretty\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }

@@ -31,18 +31,15 @@ func RunCommand(ctx context.Context, args []string) error {
 			break
 		}
 	}
-	if sep == -1 {
-		return errors.New("run expects '-- <agent command...>'")
+
+	flagArgs := args
+	var cmdArgs []string
+	if sep != -1 {
+		flagArgs = args[:sep]
+		cmdArgs = args[sep+1:]
 	}
 
-	flagArgs := args[:sep]
-	cmdArgs := args[sep+1:]
-	if len(cmdArgs) == 0 {
-		return errors.New("no agent command provided")
-	}
-
-	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("run", flagArgs, runUsage)
 
 	var logPath string
 	var watch stringSliceFlag
@@ -70,6 +67,15 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
+	}
+
+	if sep == -1 {
+		fs.Usage()
+		return errors.New("run expects '-- <agent command...>'")
+	}
+	if len(cmdArgs) == 0 {
+		fs.Usage()
+		return errors.New("no agent command provided")
 	}
 	if len(watch) == 0 {
 		watch = append(watch, ".")
@@ -253,6 +259,26 @@ func RunCommand(ctx context.Context, args []string) error {
 		return stopErr
 	}
 	return nil
+}
+
+func runUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s run: run a command under audit (auto-saves a run)\n\n", prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  sudo %s run [flags] -- <agent command...>\n\n", prog)
+
+	fmt.Fprintln(w, "Notes:")
+	fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
+	fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  sudo %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  sudo %s run --watch . --watch /etc -- bash -lc 'cat /etc/hosts >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  sudo %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }
 
 func handleObservedEvent(store *storage.Store, detector *detect.Engine, runID string, ev collector.Event) error {

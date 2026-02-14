@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,8 +19,7 @@ import (
 
 func QueryCommand(ctx context.Context, args []string) error {
 	_ = ctx
-	fs := flag.NewFlagSet("query", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("query", args, queryUsage)
 
 	var runSel string
 	var typ string
@@ -140,4 +140,25 @@ func parseDest(s string) (ip string, port int, err error) {
 		return "", 0, fmt.Errorf("invalid dest port %q", p)
 	}
 	return host, pi, nil
+}
+
+func queryUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s query: search events in a run\n\n", prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s query [flags]\n\n", prog)
+
+	fmt.Fprintln(w, "Notes:")
+	fmt.Fprintln(w, "  --run defaults to 'last'.")
+	fmt.Fprintln(w, "  --since uses Go duration syntax (e.g. 10m, 24h).")
+	fmt.Fprintln(w, "  --dest accepts ip or ip:port (e.g. 93.184.216.34:443).")
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s query --type detection\n", prog)
+	fmt.Fprintf(w, "  %s query --type net --dest 93.184.216.34:443\n", prog)
+	fmt.Fprintf(w, "  %s query --since 1h --contains curl\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }

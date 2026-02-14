@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,8 +18,7 @@ import (
 
 func ExplainCommand(ctx context.Context, args []string) error {
 	_ = ctx
-	fs := flag.NewFlagSet("explain", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("explain", args, explainUsage)
 
 	var asJSON bool
 	fs.BoolVar(&asJSON, "json", false, "emit JSON")
@@ -94,6 +94,21 @@ func ExplainCommand(ctx context.Context, args []string) error {
 
 	fmt.Fprintln(os.Stdout, text)
 	return nil
+}
+
+func explainUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s explain: explain detections for a run\n\n", prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s explain [--json] [last|<run-id>]\n\n", prog)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s explain\n", prog)
+	fmt.Fprintf(w, "  %s explain last\n", prog)
+	fmt.Fprintf(w, "  %s explain 2026-02-14_214455_bash\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }
 
 func buildExplainText(meta runs.Meta, detEvents []storage.Event, sevCounts map[string]int) string {

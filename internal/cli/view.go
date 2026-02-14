@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,8 +20,7 @@ import (
 
 func ViewCommand(ctx context.Context, args []string) error {
 	_ = ctx
-	fs := flag.NewFlagSet("view", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("view", args, viewUsage)
 
 	var asJSON bool
 	fs.BoolVar(&asJSON, "json", false, "emit JSON")
@@ -175,6 +175,21 @@ func ViewCommand(ctx context.Context, args []string) error {
 	printTopPairs("Destinations", topDest)
 
 	return nil
+}
+
+func viewUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s view: view a run summary\n\n", prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s view [--json] [last|<run-id>]\n\n", prog)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s view\n", prog)
+	fmt.Fprintf(w, "  %s view last\n", prog)
+	fmt.Fprintf(w, "  %s view --json last\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }
 
 func severityRank(ev storage.Event) int {

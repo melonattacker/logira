@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,8 +17,7 @@ import (
 
 func RunsCommand(ctx context.Context, args []string) error {
 	_ = ctx
-	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("runs", args, runsUsage)
 
 	var asJSON bool
 	fs.BoolVar(&asJSON, "json", false, "emit JSON")
@@ -94,4 +94,18 @@ func RunsCommand(ctx context.Context, args []string) error {
 			r.RunID, start, end, r.SuspiciousCount, r.Tool, cmd)
 	}
 	return nil
+}
+
+func runsUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s runs: list saved runs\n\n", prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s runs [--json]\n\n", prog)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s runs\n", prog)
+	fmt.Fprintf(w, "  %s runs --json\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }

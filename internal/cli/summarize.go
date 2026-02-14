@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,10 +19,7 @@ import (
 
 // SummarizeCommand is deprecated. Use `logira view`.
 func SummarizeCommand(ctx context.Context, args []string) error {
-	fmt.Fprintln(os.Stderr, "warning: 'summarize' is deprecated; use 'view' instead")
-
-	fs := flag.NewFlagSet("summarize", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs := newFlagSet("summarize", args, summarizeUsage)
 
 	var logPath string
 	var asJSON bool
@@ -30,6 +28,8 @@ func SummarizeCommand(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	fmt.Fprintln(os.Stderr, "warning: 'summarize' is deprecated; use 'view' instead")
 
 	sel := "last"
 	if strings.TrimSpace(logPath) != "" {
@@ -197,4 +197,24 @@ func v1ToStoredEvents(in []collector.Event) []storage.Event {
 		})
 	}
 	return out
+}
+
+func summarizeUsage(w io.Writer, fs *flag.FlagSet) {
+	prog := progName()
+	fmt.Fprintf(w, "%s summarize: (deprecated) backward wrapper for '%s view'\n\n", prog, prog)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s summarize [--json] [--log <file|dir|run-id>]\n\n", prog)
+
+	fmt.Fprintln(w, "Notes:")
+	fmt.Fprintln(w, "  This command is deprecated; use 'view' instead.")
+	fmt.Fprintln(w, "  --log accepts a v2 run directory/id, or a legacy log file.")
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s summarize --log last\n", prog)
+	fmt.Fprintf(w, "  %s summarize --log ~/.logira/runs/<run-id>/\n", prog)
+	fmt.Fprintf(w, "  %s summarize --log ./events.jsonl\n\n", prog)
+
+	fmt.Fprintln(w, "Flags:")
+	fs.PrintDefaults()
 }
