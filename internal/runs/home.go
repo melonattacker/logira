@@ -12,19 +12,41 @@ import (
 
 import _ "modernc.org/sqlite"
 
+type userHomeFunc func() (string, error)
+type readFileFunc func(path string) ([]byte, error)
+
 // HomeDir returns the base directory for logira state.
 //
 // Default: ~/.logira
 // Override: LOGIRA_HOME
 func HomeDir() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("LOGIRA_HOME")); v != "" {
+	return resolveHomeDir(os.Geteuid(), os.Getenv, os.UserHomeDir, func(string) ([]byte, error) {
+		return readPasswd()
+	})
+}
+
+func resolveHomeDir(euid int, getenv func(string) string, userHome userHomeFunc, readFile readFileFunc) (string, error) {
+	if v := strings.TrimSpace(getenv("LOGIRA_HOME")); v != "" {
 		return v, nil
 	}
 	// Backward-compat for early versions that used a non-standard env var name.
-	if v := strings.TrimSpace(os.Getenv("logira_HOME")); v != "" {
+	if v := strings.TrimSpace(getenv("logira_HOME")); v != "" {
 		return v, nil
 	}
-	home, err := os.UserHomeDir()
+
+	// If invoked via sudo, prefer the invoking user's home so runs are visible
+	// to non-root `logira runs/query/view`.
+	if euid == 0 {
+		if inv, ok := sudoInvokerFromEnv(getenv); ok && inv.UID != 0 {
+			if passwd, err := readFile("/etc/passwd"); err == nil {
+				if h, ok := lookupHomeFromPasswd(inv.User, inv.UID, passwd); ok {
+					return filepath.Join(h, ".logira"), nil
+				}
+			}
+		}
+	}
+
+	home, err := userHome()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
@@ -75,16 +97,30 @@ func EnsureHome() (string, error) {
 }
 
 func homeCandidates(primary string) ([]string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return []string{primary}, nil
+	baseHome := ""
+	if filepath.Base(primary) == ".logira" {
+		baseHome = filepath.Dir(primary)
 	}
-	alt := filepath.Join(home, ".logira2")
+	if baseHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return []string{primary}, nil
+		}
+		baseHome = home
+	}
+
+	alt := filepath.Join(baseHome, ".logira2")
 	stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME"))
 	if stateHome == "" {
-		stateHome = filepath.Join(home, ".local", "state")
+		stateHome = filepath.Join(baseHome, ".local", "state")
 	}
-	tmp := filepath.Join(os.TempDir(), "logira-"+strconv.Itoa(os.Getuid()))
+	tmpUID := os.Getuid()
+	if os.Geteuid() == 0 {
+		if inv, ok := sudoInvokerFromEnv(os.Getenv); ok && inv.UID > 0 {
+			tmpUID = inv.UID
+		}
+	}
+	tmp := filepath.Join(os.TempDir(), "logira-"+strconv.Itoa(tmpUID))
 	return []string{
 		primary,
 		alt,

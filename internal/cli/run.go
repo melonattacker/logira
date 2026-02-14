@@ -102,6 +102,9 @@ func RunCommand(ctx context.Context, args []string) error {
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", runDir, err)
 	}
+	// When invoked via sudo, store under the invoking user's home and make the
+	// run directory usable from non-root `logira query/view`.
+	_ = runs.BestEffortChownTreeToSudoUser(runDir)
 
 	cwd, _ := os.Getwd()
 	startTS := now.UTC().UnixNano()
@@ -152,6 +155,7 @@ func RunCommand(ctx context.Context, args []string) error {
 			return
 		}
 		_ = store.Close(storage.NowUnixNanos(), string(metaJSONBytes))
+		_ = runs.BestEffortChownTreeToSudoUser(runDir)
 	}()
 
 	homeDir, _ := os.UserHomeDir()
