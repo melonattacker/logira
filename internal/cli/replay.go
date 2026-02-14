@@ -6,57 +6,95 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/melonattacker/agentlogix/internal/logging"
+	"github.com/melonattacker/agentlogix/internal/storage"
 )
 
+// ReplayCommand is deprecated. Use `agentlogix query`.
 func ReplayCommand(ctx context.Context, args []string) error {
-	_ = ctx
+	fmt.Fprintln(os.Stderr, "warning: 'replay' is deprecated; use 'query' instead")
 
 	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
 	var logPath string
 	var pretty bool
-	fs.StringVar(&logPath, "log", "", "log file or directory")
-	fs.BoolVar(&pretty, "pretty", false, "human-readable output")
+	fs.StringVar(&logPath, "log", "", "deprecated: run directory or run id")
+	fs.BoolVar(&pretty, "pretty", false, "deprecated; pretty-print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if strings.TrimSpace(logPath) == "" {
-		return fmt.Errorf("--log is required")
+
+	sel := "last"
+	if strings.TrimSpace(logPath) != "" {
+		if fi, err := os.Stat(logPath); err == nil {
+			if fi.IsDir() {
+				// New-style run directory.
+				p := filepath.Join(logPath, "events.jsonl")
+				if _, err := os.Stat(p); err == nil {
+					return replayJSONLFile(p, pretty)
+				}
+				// Legacy dir of log files.
+				paths, err := logging.CollectLogFiles(logPath)
+				if err != nil {
+					return err
+				}
+				evs, err := logging.ReadEvents(paths)
+				if err != nil {
+					return err
+				}
+				enc := json.NewEncoder(os.Stdout)
+				if pretty {
+					enc.SetIndent("", "  ")
+				}
+				for _, ev := range evs {
+					if err := enc.Encode(ev); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			return replayJSONLFile(logPath, pretty)
+		}
+
+		if strings.Contains(logPath, string(os.PathSeparator)) {
+			sel = filepath.Base(filepath.Clean(logPath))
+		} else {
+			sel = strings.TrimSpace(logPath)
+		}
 	}
 
-	files, err := logging.CollectLogFiles(logPath)
-	if err != nil {
-		return err
-	}
-	events, err := logging.ReadEvents(files)
-	if err != nil {
-		return err
-	}
+	return QueryCommand(ctx, []string{"--run", sel})
+}
 
-	enc := json.NewEncoder(os.Stdout)
-	for _, ev := range events {
-		if !pretty {
+func replayJSONLFile(path string, pretty bool) error {
+	if evs, err := storage.ReadJSONL(path); err == nil {
+		enc := json.NewEncoder(os.Stdout)
+		if pretty {
+			enc.SetIndent("", "  ")
+		}
+		for _, ev := range evs {
 			if err := enc.Encode(ev); err != nil {
 				return err
 			}
-			continue
 		}
-		switch ev.Type {
-		case "exec":
-			d, _ := parseExecDetail(ev.Detail)
-			fmt.Fprintf(os.Stdout, "%s exec pid=%d ppid=%d cmd=%s argv=%v cwd=%s\n", ev.Timestamp, ev.PID, ev.PPID, d.Filename, d.Argv, d.CWD)
-		case "file":
-			d, _ := parseFileDetail(ev.Detail)
-			fmt.Fprintf(os.Stdout, "%s file pid=%d op=%s path=%s\n", ev.Timestamp, ev.PID, d.Op, d.Path)
-		case "net":
-			d, _ := parseNetDetail(ev.Detail)
-			fmt.Fprintf(os.Stdout, "%s net pid=%d op=%s proto=%s dst=%s:%d bytes=%d\n", ev.Timestamp, ev.PID, d.Op, d.Proto, d.DstIP, d.DstPort, d.Bytes)
-		default:
-			fmt.Fprintf(os.Stdout, "%s unknown type=%s pid=%d\n", ev.Timestamp, ev.Type, ev.PID)
+		return nil
+	}
+
+	evs, err := logging.ReadEvents([]string{path})
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(os.Stdout)
+	if pretty {
+		enc.SetIndent("", "  ")
+	}
+	for _, ev := range evs {
+		if err := enc.Encode(ev); err != nil {
+			return err
 		}
 	}
 	return nil

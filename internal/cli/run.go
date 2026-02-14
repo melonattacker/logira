@@ -2,18 +2,25 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/melonattacker/agentlogix/collector"
-	"github.com/melonattacker/agentlogix/internal/logging"
+	"github.com/melonattacker/agentlogix/internal/cgroupv2"
+	"github.com/melonattacker/agentlogix/internal/detect"
+	"github.com/melonattacker/agentlogix/internal/model"
+	"github.com/melonattacker/agentlogix/internal/runs"
+	"github.com/melonattacker/agentlogix/internal/storage"
 )
 
 func RunCommand(ctx context.Context, args []string) error {
@@ -42,13 +49,15 @@ func RunCommand(ctx context.Context, args []string) error {
 	var enableExec bool
 	var enableFile bool
 	var enableNet bool
+	var tool string
 	var argvMax int
 	var argvMaxBytes int
 	var hashMaxBytes int64
 	var waitChildren bool
 	var waitChildrenTimeout time.Duration
 
-	fs.StringVar(&logPath, "log", "", "output JSONL log file path (required)")
+	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
+	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
 	fs.Var(&watch, "watch", "watch path for file events (repeatable)")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
@@ -62,11 +71,46 @@ func RunCommand(ctx context.Context, args []string) error {
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
 	}
-	if strings.TrimSpace(logPath) == "" {
-		return errors.New("--log is required")
-	}
 	if len(watch) == 0 {
 		watch = append(watch, ".")
+	}
+
+	if strings.TrimSpace(logPath) != "" {
+		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.agentlogix/runs/<run-id>/")
+	}
+
+	home, err := runs.EnsureHome()
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(tool) == "" {
+		tool = filepath.Base(cmdArgs[0])
+	}
+	now := time.Now()
+	runID, err := runs.NewRunID(home, tool, now)
+	if err != nil {
+		return err
+	}
+	runDir := runs.RunDir(home, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", runDir, err)
+	}
+
+	cwd, _ := os.Getwd()
+	startTS := now.UTC().UnixNano()
+	meta := runs.Meta{
+		RunID:       runID,
+		StartTS:     startTS,
+		Tool:        runs.SanitizeTool(tool),
+		Command:     strings.Join(cmdArgs, " "),
+		CommandArgv: append([]string{}, cmdArgs...),
+		CWD:         cwd,
+		WatchPaths:  append([]string{}, watch...),
+		Version:     2,
+	}
+	if err := runs.WriteMeta(runDir, meta); err != nil {
+		return err
 	}
 
 	cfg := collector.Config{
@@ -84,25 +128,48 @@ func RunCommand(ctx context.Context, args []string) error {
 		return err
 	}
 
-	writer, err := logging.NewJSONLWriter(logPath)
+	metaJSONBytes, _ := json.Marshal(meta)
+	store, err := storage.Open(storage.OpenParams{
+		RunID:    runID,
+		RunDir:   runDir,
+		StartTS:  startTS,
+		Command:  meta.Command,
+		Tool:     meta.Tool,
+		MetaJSON: string(metaJSONBytes),
+	})
 	if err != nil {
 		return err
 	}
-	defer writer.Close()
+	storeClosed := false
+	defer func() {
+		if storeClosed {
+			return
+		}
+		_ = store.Close(storage.NowUnixNanos(), string(metaJSONBytes))
+	}()
+
+	homeDir, _ := os.UserHomeDir()
+	detector := detect.NewEngine(homeDir)
 
 	events := make(chan collector.Event, 4096)
 	if err := col.Start(ctx, events); err != nil {
 		return err
 	}
 
-	var dropped atomic.Uint64
 	var writerWG sync.WaitGroup
 	writerWG.Add(1)
+	var writerErr error
+	var writerMu sync.Mutex
 	go func() {
 		defer writerWG.Done()
 		for ev := range events {
-			if err := writer.WriteEvent(ev); err != nil {
-				dropped.Add(1)
+			if err := handleObservedEvent(store, detector, runID, ev); err != nil {
+				writerMu.Lock()
+				if writerErr == nil {
+					writerErr = err
+				}
+				writerMu.Unlock()
+				return
 			}
 		}
 	}()
@@ -113,11 +180,24 @@ func RunCommand(ctx context.Context, args []string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 
+	var cg *cgroupv2.Cgroup
+	if runtime.GOOS == "linux" && cgroupv2.Available() {
+		if c, err := cgroupv2.Create(runID); err == nil {
+			cg = c
+			meta.CgroupPath = c.Path
+			_ = runs.WriteMeta(runDir, meta)
+		}
+	}
+
 	if err := cmd.Start(); err != nil {
 		_ = col.Stop(context.Background())
 		close(events)
 		writerWG.Wait()
 		return fmt.Errorf("start agent command: %w", err)
+	}
+
+	if cg != nil {
+		_ = cg.JoinPID(cmd.Process.Pid)
 	}
 	if setter, ok := col.(collector.TargetSetter); ok {
 		setter.SetTargetPID(cmd.Process.Pid)
@@ -138,9 +218,30 @@ func RunCommand(ctx context.Context, args []string) error {
 	close(events)
 	writerWG.Wait()
 
-	if dropped.Load() > 0 {
-		fmt.Fprintf(os.Stderr, "warning: failed to write %d events\n", dropped.Load())
+	writerMu.Lock()
+	werr := writerErr
+	writerMu.Unlock()
+	if werr != nil {
+		return fmt.Errorf("write events: %w", werr)
 	}
+
+	endTS := storage.NowUnixNanos()
+	meta.EndTS = endTS
+	meta.SuspiciousCount = store.SuspiciousCount()
+	metaJSONBytes, _ = json.Marshal(meta)
+	_ = runs.WriteMeta(runDir, meta)
+	_ = store.Close(endTS, string(metaJSONBytes))
+	storeClosed = true
+
+	if cg != nil {
+		_ = cg.Remove()
+	}
+
+	if strings.TrimSpace(logPath) != "" {
+		_ = copyFile(filepath.Join(runDir, "events.jsonl"), logPath)
+	}
+
+	fmt.Fprintf(os.Stderr, "run_id=%s dir=%s suspicious=%d\n", runID, runDir, meta.SuspiciousCount)
 
 	if waitErr != nil {
 		if stopErr != nil {
@@ -152,4 +253,78 @@ func RunCommand(ctx context.Context, args []string) error {
 		return stopErr
 	}
 	return nil
+}
+
+func handleObservedEvent(store *storage.Store, detector *detect.Engine, runID string, ev collector.Event) error {
+	typ := storage.EventType(ev.Type)
+	switch typ {
+	case storage.TypeExec, storage.TypeFile, storage.TypeNet:
+	default:
+		return nil
+	}
+
+	ts := storage.NowUnixNanos()
+
+	var summary string
+	var attrs storage.EventRow
+
+	switch typ {
+	case storage.TypeExec:
+		var d model.ExecDetail
+		_ = json.Unmarshal(ev.Detail, &d)
+		summary = execSummary(d)
+		attrs.Exe = d.Filename
+	case storage.TypeFile:
+		var d model.FileDetail
+		_ = json.Unmarshal(ev.Detail, &d)
+		summary = fmt.Sprintf("file %s %s", d.Op, d.Path)
+		attrs.Path = d.Path
+	case storage.TypeNet:
+		var d model.NetDetail
+		_ = json.Unmarshal(ev.Detail, &d)
+		summary = fmt.Sprintf("net %s %s:%d bytes=%d", d.Op, d.DstIP, d.DstPort, d.Bytes)
+		attrs.DstIP = d.DstIP
+		attrs.DstPort = int(d.DstPort)
+	}
+
+	seq, err := store.AppendObserved(ts, typ, ev.PID, ev.PPID, ev.UID, summary, ev.Detail, attrs)
+	if err != nil {
+		return err
+	}
+
+	for _, det := range detector.Evaluate(typ, ev.Detail) {
+		_, _ = store.AppendDetection(storage.NowUnixNanos(), det, seq)
+	}
+	return nil
+}
+
+func execSummary(d model.ExecDetail) string {
+	if len(d.Argv) > 0 {
+		head := d.Argv
+		if len(head) > 3 {
+			head = head[:3]
+		}
+		return "exec " + strings.Join(head, " ")
+	}
+	if d.Filename != "" {
+		return "exec " + d.Filename
+	}
+	return "exec <unknown>"
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
 }

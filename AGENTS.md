@@ -5,7 +5,7 @@ This repository implements **AgentLogix**, a **Linux-only** CLI auditor that rec
 - file changes
 - network activity
 
-All output is **JSONL** (one JSON object per line) suitable for auditing.
+Each `run` is auto-saved under a per-run directory with **JSONL + SQLite** for auditing and fast search.
 
 ## Non-Negotiables
 
@@ -15,26 +15,41 @@ All output is **JSONL** (one JSON object per line) suitable for auditing.
   - `collector/linux/collector.go`: Linux implementation
   - `collector/fallback_stub.go`: non-Linux stub
 - CLI MUST expose:
-  - `agentlogix run --log <path> -- <agent command...>` (`--log` required)
-  - `agentlogix summarize --log <file|dir>`
-  - `agentlogix replay --log <file|dir>`
+  - `agentlogix run -- <agent command...>` (auto-saves run)
+  - `agentlogix runs`
+  - `agentlogix view [last|<run-id>]`
+  - `agentlogix query [filters...]`
+  - `agentlogix explain [last|<run-id>]`
+  - Backward wrappers (deprecated):
+    - `agentlogix summarize --log <file|dir>`
+    - `agentlogix replay --log <file|dir>`
 - Logs MUST be JSONL with:
-  - `type`: `exec` | `file` | `net`
-  - `timestamp`: RFC3339Nano UTC
-  - `detail`: event-specific object
+  - `run_id`, `seq`, `ts` (unix nanos), `type`, `summary`, `data_json`
+  - `type`: `exec` | `file` | `net` | `detection`
 
 ## Current Architecture (Source of Truth)
 
 - CLI:
   - `cmd/agentlogix/main.go`
-  - `internal/cli/run.go`, `internal/cli/summarize.go`, `internal/cli/replay.go`
+  - `internal/cli/run.go`, `internal/cli/runs.go`, `internal/cli/view.go`, `internal/cli/query.go`, `internal/cli/explain.go`
+  - deprecated wrappers: `internal/cli/summarize.go`, `internal/cli/replay.go`
+
+- Run storage:
+  - base dir: `~/.agentlogix` (override: `AGENTLOGIX_HOME`)
+  - per-run dir: `~/.agentlogix/runs/<run-id>/`
+  - metadata: `internal/runs/`
+
+- Storage/index:
+  - JSONL writer/reader: `internal/storage/jsonl.go`, `internal/storage/jsonl_read.go`
+  - SQLite (modernc, no CGO): `internal/storage/sqlite.go`
+  - Queries: `internal/storage/query.go`
+
+- Detection (observe-only):
+  - rules engine: `internal/detect/engine.go`
 
 - Event model:
   - `collector/common.go` defines `collector.Event` and `collector.Collector`.
   - `internal/model/events.go` defines the JSON shapes used in `detail`.
-
-- JSONL:
-  - `internal/logging/jsonl.go` handles writing/reading and replay sorting.
 
 - Linux collector:
   - `collector/linux/collector.go` composes:
@@ -117,9 +132,9 @@ Override paths with:
 ### Manual smoke test
 - Build: `make build`
 - Run:
-  - `./agentlogix run --log out.jsonl -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
-  - `./agentlogix summarize --log out.jsonl`
-  - `./agentlogix replay --log out.jsonl --pretty`
+  - `sudo ./agentlogix run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
+  - `./agentlogix view last`
+  - `./agentlogix query --run last --type detection`
 
 ## Known Gaps / Follow-ups (keep explicit)
 

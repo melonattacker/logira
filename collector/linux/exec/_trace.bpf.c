@@ -13,6 +13,7 @@ struct argv_cache {
 
 struct exec_event {
     __u64 ts_ns;
+    __u64 cgroup_id;
     __u32 pid;
     __u32 ppid;
     __u32 uid;
@@ -118,6 +119,7 @@ int trace_sched_exec(void *ctx) {
     }
 
     event->ts_ns = bpf_ktime_get_ns();
+    event->cgroup_id = bpf_get_current_cgroup_id();
     event->pid = pid;
     event->ppid = 0;
     event->uid = uid;

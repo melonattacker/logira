@@ -24,16 +24,17 @@ import (
 )
 
 type rawNetEvent struct {
-	TSNS  uint64
-	PID   uint32
-	UID   uint32
-	Op    uint8
-	Proto uint8
-	Pad1  uint16
-	IP4   uint32
-	Port  uint16
-	Pad2  uint16
-	Bytes int64
+	TSNS     uint64
+	CgroupID uint64
+	PID      uint32
+	UID      uint32
+	Op       uint8
+	Proto    uint8
+	Pad1     uint16
+	IP4      uint32
+	Port     uint16
+	Pad2     uint16
+	Bytes    int64
 }
 
 type Tracer struct {
@@ -180,11 +181,12 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		detail := model.NetDetail{
-			Op:      opName(raw.Op),
-			Proto:   protoName(raw.Proto),
-			DstIP:   ipv4String(raw.IP4),
-			DstPort: raw.Port,
-			Bytes:   raw.Bytes,
+			Op:       opName(raw.Op),
+			Proto:    protoName(raw.Proto),
+			DstIP:    ipv4String(raw.IP4),
+			DstPort:  raw.Port,
+			Bytes:    raw.Bytes,
+			CgroupID: raw.CgroupID,
 		}
 		b, err := json.Marshal(detail)
 		if err != nil {

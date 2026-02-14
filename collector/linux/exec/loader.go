@@ -34,6 +34,7 @@ type Config struct {
 
 type rawExecEvent struct {
 	TSNS     uint64
+	CgroupID uint64
 	PID      uint32
 	PPID     uint32
 	UID      uint32
@@ -205,6 +206,7 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			Argv:         argv,
 			Comm:         cString(raw.Comm[:]),
 			KernelTimeNS: raw.TSNS,
+			CgroupID:     raw.CgroupID,
 		}
 		b, err := json.Marshal(detail)
 		if err != nil {

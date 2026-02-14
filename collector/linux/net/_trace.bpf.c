@@ -46,6 +46,7 @@ struct fd_key {
 
 struct net_event {
     __u64 ts_ns;
+    __u64 cgroup_id;
     __u32 pid;
     __u32 uid;
     __u8 op;
@@ -114,6 +115,7 @@ static __always_inline void submit_event(__u32 pid, __u32 uid, __u8 op, struct a
         return;
     }
     event->ts_ns = bpf_ktime_get_ns();
+    event->cgroup_id = bpf_get_current_cgroup_id();
     event->pid = pid;
     event->uid = uid;
     event->op = op;
