@@ -20,9 +20,6 @@ Each `run` is auto-saved under a per-run directory with **JSONL + SQLite** for a
   - `logira view [last|<run-id>]`
   - `logira query [filters...]`
   - `logira explain [last|<run-id>]`
-  - Backward wrappers (deprecated):
-    - `logira summarize --log <file|dir>`
-    - `logira replay --log <file|dir>`
 - Logs MUST be JSONL with:
   - `run_id`, `seq`, `ts` (unix nanos), `type`, `summary`, `data_json`
   - `type`: `exec` | `file` | `net` | `detection`
@@ -32,7 +29,6 @@ Each `run` is auto-saved under a per-run directory with **JSONL + SQLite** for a
 - CLI:
   - `cmd/logira/main.go`
   - `internal/cli/run.go`, `internal/cli/runs.go`, `internal/cli/view.go`, `internal/cli/query.go`, `internal/cli/explain.go`
-  - deprecated wrappers: `internal/cli/summarize.go`, `internal/cli/replay.go`
 
 - Run storage:
   - base dir: `~/.logira` (override: `LOGIRA_HOME`)
