@@ -1,10 +1,10 @@
-# AgentLogix SQLite Schema
+# logira SQLite Schema
 
 Each run directory contains `index.sqlite` for fast queries:
 
-`$AGENTLOGIX_HOME/runs/<run-id>/index.sqlite`
+`$LOGIRA_HOME/runs/<run-id>/index.sqlite`
 
-AgentLogix uses `modernc.org/sqlite` (no CGO required).
+logira uses `modernc.org/sqlite` (no CGO required).
 
 ## Tables
 
@@ -65,4 +65,3 @@ CREATE INDEX idx_events_run_ts ON events(run_id, ts);
 CREATE INDEX idx_events_run_type ON events(run_id, type);
 CREATE INDEX idx_events_run_ts_type ON events(run_id, ts, type);
 ```
-

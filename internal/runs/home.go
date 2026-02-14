@@ -12,19 +12,23 @@ import (
 
 import _ "modernc.org/sqlite"
 
-// HomeDir returns the base directory for AgentLogix state.
+// HomeDir returns the base directory for logira state.
 //
-// Default: ~/.agentlogix
-// Override: AGENTLOGIX_HOME
+// Default: ~/.logira
+// Override: LOGIRA_HOME
 func HomeDir() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("AGENTLOGIX_HOME")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("LOGIRA_HOME")); v != "" {
+		return v, nil
+	}
+	// Backward-compat for early versions that used a non-standard env var name.
+	if v := strings.TrimSpace(os.Getenv("logira_HOME")); v != "" {
 		return v, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	return filepath.Join(home, ".agentlogix"), nil
+	return filepath.Join(home, ".logira"), nil
 }
 
 var (
@@ -40,12 +44,16 @@ func EnsureHome() (string, error) {
 			ensureErr = err
 			return
 		}
-		if strings.TrimSpace(os.Getenv("AGENTLOGIX_HOME")) != "" {
+		if strings.TrimSpace(os.Getenv("logira_HOME")) != "" {
+			ensureHome, ensureErr = ensureHomeDir(home)
+			return
+		}
+		if strings.TrimSpace(os.Getenv("LOGIRA_HOME")) != "" {
 			ensureHome, ensureErr = ensureHomeDir(home)
 			return
 		}
 
-		// Prefer ~/.agentlogix (spec), but fall back if the environment restricts
+		// Prefer ~/.logira (spec), but fall back if the environment restricts
 		// SQLite file creation/locking there.
 		cands, err := homeCandidates(home)
 		if err != nil {
@@ -61,7 +69,7 @@ func EnsureHome() (string, error) {
 				return
 			}
 		}
-		ensureErr = fmt.Errorf("unable to initialize agentlogix home dir (tried %v)", cands)
+		ensureErr = fmt.Errorf("unable to initialize logira home dir (tried %v)", cands)
 	})
 	return ensureHome, ensureErr
 }
@@ -71,16 +79,16 @@ func homeCandidates(primary string) ([]string, error) {
 	if err != nil {
 		return []string{primary}, nil
 	}
-	alt := filepath.Join(home, ".agentlogix2")
+	alt := filepath.Join(home, ".logira2")
 	stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME"))
 	if stateHome == "" {
 		stateHome = filepath.Join(home, ".local", "state")
 	}
-	tmp := filepath.Join(os.TempDir(), "agentlogix-"+strconv.Itoa(os.Getuid()))
+	tmp := filepath.Join(os.TempDir(), "logira-"+strconv.Itoa(os.Getuid()))
 	return []string{
 		primary,
 		alt,
-		filepath.Join(stateHome, "agentlogix"),
+		filepath.Join(stateHome, "logira"),
 		tmp,
 	}, nil
 }
@@ -94,7 +102,7 @@ func ensureHomeDir(home string) (string, error) {
 
 // sqliteWorks checks whether modernc SQLite can create/open a DB under home.
 // This is an environment-specific guard: some sandboxes restrict SQLite in
-// particular paths (e.g. ~/.agentlogix).
+// particular paths (e.g. ~/.logira).
 func sqliteWorks(home string) bool {
 	// Use a non-hidden filename: some environments restrict SQLite under $HOME
 	// for dot-prefixed DB files.

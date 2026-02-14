@@ -12,7 +12,7 @@ const (
 	EventTypeNet  = "net"
 )
 
-var ErrLinuxOnly = errors.New("agentlogix collector is only supported on linux")
+var ErrLinuxOnly = errors.New("logira collector is only supported on linux")
 
 type Event struct {
 	Type      string          `json:"type"`

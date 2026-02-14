@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/rlimit"
-	collector "github.com/melonattacker/agentlogix/collector/common"
-	exectrace "github.com/melonattacker/agentlogix/collector/linux/exec"
-	filewatcher "github.com/melonattacker/agentlogix/collector/linux/file"
-	nettrace "github.com/melonattacker/agentlogix/collector/linux/net"
+	collector "github.com/melonattacker/logira/collector/common"
+	exectrace "github.com/melonattacker/logira/collector/linux/exec"
+	filewatcher "github.com/melonattacker/logira/collector/linux/file"
+	nettrace "github.com/melonattacker/logira/collector/linux/net"
 )
 
 type LinuxCollector struct {

@@ -19,8 +19,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	collector "github.com/melonattacker/agentlogix/collector/common"
-	"github.com/melonattacker/agentlogix/internal/model"
+	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 type rawNetEvent struct {
@@ -63,7 +63,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		return nil, fmt.Errorf("net tracer already started")
 	}
 
-	objPath := os.Getenv("AGENTLOGIX_NET_BPF_OBJ")
+	objPath := getenvAny("LOGIRA_NET_BPF_OBJ", "logira_NET_BPF_OBJ")
 	if objPath == "" {
 		tried := []string{
 			filepath.Join("collector", "linux", "net", "trace_bpfel.o"),
@@ -72,7 +72,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		objPath = firstExistingPath(tried...)
 		if objPath == "" {
 			return nil, fmt.Errorf(
-				"net bpf object not found (tried %s). Run `make generate` to create it, or set AGENTLOGIX_NET_BPF_OBJ to an existing .o",
+				"net bpf object not found (tried %s). Run `make generate` to create it, or set LOGIRA_NET_BPF_OBJ to an existing .o",
 				strings.Join(tried, ", "),
 			)
 		}
@@ -278,6 +278,15 @@ func firstExistingPath(paths ...string) string {
 		}
 		if _, err := os.Stat(p); err == nil {
 			return p
+		}
+	}
+	return ""
+}
+
+func getenvAny(keys ...string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
 		}
 	}
 	return ""

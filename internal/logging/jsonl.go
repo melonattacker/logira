@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/melonattacker/agentlogix/collector"
+	"github.com/melonattacker/logira/collector"
 )
 
 type JSONLWriter struct {

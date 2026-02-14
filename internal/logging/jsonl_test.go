@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/melonattacker/agentlogix/collector"
+	"github.com/melonattacker/logira/collector"
 )
 
 func TestWriteAndReadEventsSorted(t *testing.T) {

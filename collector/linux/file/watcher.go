@@ -18,8 +18,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	collector "github.com/melonattacker/agentlogix/collector/common"
-	"github.com/melonattacker/agentlogix/internal/model"
+	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 type Config struct {

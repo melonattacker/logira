@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/melonattacker/agentlogix/internal/runs"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/internal/runs"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
 func ExplainCommand(ctx context.Context, args []string) error {

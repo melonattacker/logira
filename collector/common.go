@@ -1,6 +1,6 @@
 package collector
 
-import common "github.com/melonattacker/agentlogix/collector/common"
+import common "github.com/melonattacker/logira/collector/common"
 
 const (
 	EventTypeExec = common.EventTypeExec

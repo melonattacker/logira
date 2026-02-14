@@ -2,7 +2,7 @@
 
 package collector
 
-import linuxcollector "github.com/melonattacker/agentlogix/collector/linux"
+import linuxcollector "github.com/melonattacker/logira/collector/linux"
 
 func New(cfg Config) Collector {
 	return linuxcollector.NewCollector(cfg)

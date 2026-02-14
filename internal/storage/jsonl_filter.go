@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/melonattacker/agentlogix/internal/model"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 func Filter(events []Event, opts QueryOptions) []Event {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/melonattacker/agentlogix/internal/model"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 type stringSliceFlag []string

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/melonattacker/agentlogix/collector"
-	"github.com/melonattacker/agentlogix/internal/logging"
+	"github.com/melonattacker/logira/collector"
+	"github.com/melonattacker/logira/internal/logging"
 )
 
 func TestCollectorIntegrationSmoke(t *testing.T) {

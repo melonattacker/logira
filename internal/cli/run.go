@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/melonattacker/agentlogix/collector"
-	"github.com/melonattacker/agentlogix/internal/cgroupv2"
-	"github.com/melonattacker/agentlogix/internal/detect"
-	"github.com/melonattacker/agentlogix/internal/model"
-	"github.com/melonattacker/agentlogix/internal/runs"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/collector"
+	"github.com/melonattacker/logira/internal/cgroupv2"
+	"github.com/melonattacker/logira/internal/detect"
+	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/runs"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
 func RunCommand(ctx context.Context, args []string) error {
@@ -76,7 +76,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	}
 
 	if strings.TrimSpace(logPath) != "" {
-		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.agentlogix/runs/<run-id>/")
+		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.logira/runs/<run-id>/")
 	}
 
 	home, err := runs.EnsureHome()

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/melonattacker/agentlogix/internal/runs"
+	"github.com/melonattacker/logira/internal/runs"
 )
 
 func RunsCommand(ctx context.Context, args []string) error {

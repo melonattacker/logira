@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/melonattacker/agentlogix/internal/model"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
 type Engine struct {

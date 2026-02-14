@@ -1,8 +1,8 @@
-# AgentLogix JSONL (v2)
+# logira JSONL (v2)
 
-AgentLogix stores one JSON object per line in `events.jsonl` under each run directory:
+logira stores one JSON object per line in `events.jsonl` under each run directory:
 
-`$AGENTLOGIX_HOME/runs/<run-id>/events.jsonl`
+`$LOGIRA_HOME/runs/<run-id>/events.jsonl`
 
 Common fields:
 - `run_id`: run identifier
@@ -122,4 +122,3 @@ Detection events are derived by built-in rules (observe-only). They are written 
 - `severity`: `info` | `low` | `medium` | `high`
 - `message`
 - `related_event_seq`: points to the observed event `seq` that triggered the rule (best-effort)
-

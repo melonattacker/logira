@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/melonattacker/agentlogix/internal/model"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 func TestStore_SQLiteAndJSONL(t *testing.T) {

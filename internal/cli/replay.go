@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/melonattacker/agentlogix/internal/logging"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/internal/logging"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
-// ReplayCommand is deprecated. Use `agentlogix query`.
+// ReplayCommand is deprecated. Use `logira query`.
 func ReplayCommand(ctx context.Context, args []string) error {
 	fmt.Fprintln(os.Stderr, "warning: 'replay' is deprecated; use 'query' instead")
 

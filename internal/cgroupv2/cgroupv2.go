@@ -20,7 +20,7 @@ func Available() bool {
 	return err == nil
 }
 
-// Create creates a cgroup v2 directory under /sys/fs/cgroup/agentlogix/<run-id>.
+// Create creates a cgroup v2 directory under /sys/fs/cgroup/logira/<run-id>.
 func Create(runID string) (*Cgroup, error) {
 	if !Available() {
 		return nil, fmt.Errorf("cgroup v2 not available under %s", MountPoint)
@@ -29,7 +29,7 @@ func Create(runID string) (*Cgroup, error) {
 	if runID == "" {
 		return nil, fmt.Errorf("empty runID")
 	}
-	dir := filepath.Join(MountPoint, "agentlogix", runID)
+	dir := filepath.Join(MountPoint, "logira", runID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}

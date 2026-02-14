@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/melonattacker/agentlogix/collector"
-	"github.com/melonattacker/agentlogix/internal/logging"
-	"github.com/melonattacker/agentlogix/internal/model"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/collector"
+	"github.com/melonattacker/logira/internal/logging"
+	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
-// SummarizeCommand is deprecated. Use `agentlogix view`.
+// SummarizeCommand is deprecated. Use `logira view`.
 func SummarizeCommand(ctx context.Context, args []string) error {
 	fmt.Fprintln(os.Stderr, "warning: 'summarize' is deprecated; use 'view' instead")
 
@@ -37,7 +37,7 @@ func SummarizeCommand(ctx context.Context, args []string) error {
 			return summarizeLogFile(logPath, asJSON)
 		}
 
-		// Accept either run id or a path to ~/.agentlogix/runs/<id>.
+		// Accept either run id or a path to ~/.logira/runs/<id>.
 		if strings.Contains(logPath, string(os.PathSeparator)) {
 			sel = filepath.Base(filepath.Clean(logPath))
 		} else {

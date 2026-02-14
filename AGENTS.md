@@ -1,6 +1,6 @@
-# AGENTS.md (AgentLogix)
+# AGENTS.md (logira)
 
-This repository implements **AgentLogix**, a **Linux-only** CLI auditor that records:
+This repository implements **logira**, a **Linux-only** CLI auditor that records:
 - process `exec` events
 - file changes
 - network activity
@@ -15,14 +15,14 @@ Each `run` is auto-saved under a per-run directory with **JSONL + SQLite** for a
   - `collector/linux/collector.go`: Linux implementation
   - `collector/fallback_stub.go`: non-Linux stub
 - CLI MUST expose:
-  - `agentlogix run -- <agent command...>` (auto-saves run)
-  - `agentlogix runs`
-  - `agentlogix view [last|<run-id>]`
-  - `agentlogix query [filters...]`
-  - `agentlogix explain [last|<run-id>]`
+  - `logira run -- <agent command...>` (auto-saves run)
+  - `logira runs`
+  - `logira view [last|<run-id>]`
+  - `logira query [filters...]`
+  - `logira explain [last|<run-id>]`
   - Backward wrappers (deprecated):
-    - `agentlogix summarize --log <file|dir>`
-    - `agentlogix replay --log <file|dir>`
+    - `logira summarize --log <file|dir>`
+    - `logira replay --log <file|dir>`
 - Logs MUST be JSONL with:
   - `run_id`, `seq`, `ts` (unix nanos), `type`, `summary`, `data_json`
   - `type`: `exec` | `file` | `net` | `detection`
@@ -30,13 +30,13 @@ Each `run` is auto-saved under a per-run directory with **JSONL + SQLite** for a
 ## Current Architecture (Source of Truth)
 
 - CLI:
-  - `cmd/agentlogix/main.go`
+  - `cmd/logira/main.go`
   - `internal/cli/run.go`, `internal/cli/runs.go`, `internal/cli/view.go`, `internal/cli/query.go`, `internal/cli/explain.go`
   - deprecated wrappers: `internal/cli/summarize.go`, `internal/cli/replay.go`
 
 - Run storage:
-  - base dir: `~/.agentlogix` (override: `AGENTLOGIX_HOME`)
-  - per-run dir: `~/.agentlogix/runs/<run-id>/`
+  - base dir: `~/.logira` (override: `LOGIRA_HOME`)
+  - per-run dir: `~/.logira/runs/<run-id>/`
   - metadata: `internal/runs/`
 
 - Storage/index:
@@ -110,8 +110,8 @@ Runtime loader looks for (in this order):
 - `collector/linux/*/trace.bpf.o`
 
 Override paths with:
-- `AGENTLOGIX_EXEC_BPF_OBJ`
-- `AGENTLOGIX_NET_BPF_OBJ`
+- `LOGIRA_EXEC_BPF_OBJ`
+- `LOGIRA_NET_BPF_OBJ`
 
 ## Development Rules
 
@@ -132,9 +132,9 @@ Override paths with:
 ### Manual smoke test
 - Build: `make build`
 - Run:
-  - `sudo ./agentlogix run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
-  - `./agentlogix view last`
-  - `./agentlogix query --run last --type detection`
+  - `sudo ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
+  - `./logira view last`
+  - `./logira query --run last --type detection`
 
 ## Known Gaps / Follow-ups (keep explicit)
 

@@ -41,9 +41,9 @@ go test -tags=integration ./collector/linux -v
 
 ## Troubleshooting
 
-- AgentLogix state directory can be overridden:
-  - `AGENTLOGIX_HOME=/path/to/state`
+- logira state directory can be overridden:
+  - `LOGIRA_HOME=/path/to/state`
 - If runtime fails to load BPF objects, set explicit paths:
-  - `AGENTLOGIX_EXEC_BPF_OBJ=/abs/path/to/trace_bpfel.o`
-  - `AGENTLOGIX_NET_BPF_OBJ=/abs/path/to/trace_bpfel.o`
+  - `LOGIRA_EXEC_BPF_OBJ=/abs/path/to/trace_bpfel.o`
+  - `LOGIRA_NET_BPF_OBJ=/abs/path/to/trace_bpfel.o`
 - fanotify may fail on some systems/policies; the watcher falls back to inotify (PID attribution will be lost).

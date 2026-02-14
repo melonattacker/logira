@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/melonattacker/agentlogix/internal/model"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
 func TestEngine_Rules(t *testing.T) {

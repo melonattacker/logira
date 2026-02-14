@@ -18,7 +18,7 @@ BPF_INCLUDES += -I/usr/include/$(MULTIARCH)
 endif
 
 build:
-	GOCACHE=$(GOCACHE_DIR) go build ./cmd/agentlogix
+	GOCACHE=$(GOCACHE_DIR) go build ./cmd/logira
 
 test:
 	GOCACHE=$(GOCACHE_DIR) go test ./...

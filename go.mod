@@ -1,4 +1,4 @@
-module github.com/melonattacker/agentlogix
+module github.com/melonattacker/logira
 
 go 1.22.0
 

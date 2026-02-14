@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/melonattacker/agentlogix/internal/model"
-	"github.com/melonattacker/agentlogix/internal/runs"
-	"github.com/melonattacker/agentlogix/internal/storage"
+	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/runs"
+	"github.com/melonattacker/logira/internal/storage"
 )
 
 func ViewCommand(ctx context.Context, args []string) error {
