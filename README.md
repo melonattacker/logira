@@ -1,9 +1,19 @@
 # logira
 
-logira is a Linux-focused **runtime security auditor** for AI agent executions (observe-only).
-It records process execs, file changes, network activity, and derived detections, and stores each run under a dedicated directory with **JSONL + SQLite** for fast querying.
+**Runtime security for AI agents.**
 
-## Quick Start (Linux)
+`logira` is a Linux-only CLI that records what an AI agent actually did while it ran:
+the processes it executed, files it touched, and network activity it initiated.
+Each run is auto-saved locally so you can review it later (`view`), search it (`query`), and understand detections (`explain`).
+
+## What is this for?
+
+- You want an audit trail when running agents with permissive modes like `codex --yolo` or `claude --dangerously-skip-permissions`.
+- You want to review or share "what happened" after an agent run, without relying on the agent's own narrative.
+- You want to debug surprising changes by looking at the timeline of exec/file/net activity.
+- You want lightweight, observe-only runtime monitoring during local development and testing.
+
+## Quick Start
 
 Build:
 
@@ -11,10 +21,22 @@ Build:
 make build
 ```
 
-Trace a command (events are auto-saved):
+Run an agent under audit (events are auto-saved):
 
 ```bash
 sudo ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'
+```
+
+Run Codex CLI:
+
+```bash
+sudo ./logira run -- codex --yolo "Update the README to be clearer and add examples."
+```
+
+Run Claude Code CLI:
+
+```bash
+sudo ./logira run -- claude --dangerously-skip-permissions "Find and fix flaky tests."
 ```
 
 List runs:
@@ -23,14 +45,14 @@ List runs:
 ./logira runs
 ```
 
-View the last run:
+View and explain the last run:
 
 ```bash
 ./logira view last
 ./logira explain last
 ```
 
-Query (SQLite-first, JSONL fallback):
+Query events:
 
 ```bash
 ./logira query --run last --type detection
@@ -38,9 +60,17 @@ Query (SQLite-first, JSONL fallback):
 ./logira query --run last --contains curl
 ```
 
-## Storage Layout
+## Commands
 
-Default state directory: `~/.logira` (override: `LOGIRA_HOME`)
+- `logira run -- <command...>`: run a command under audit and auto-save a new run
+- `logira runs`: list saved runs
+- `logira view [last|<run-id>]`: view a run summary
+- `logira query [filters...]`: search events in a run
+- `logira explain [last|<run-id>]`: explain detections for a run
+
+## Where Is Data Stored?
+
+Default home directory: `~/.logira` (override: `LOGIRA_HOME`)
 
 Each run is stored at:
 
@@ -56,13 +86,12 @@ Each run is stored at:
 
 ## Docs
 
-- JSONL schema: `docs/jsonl.md`
-- SQLite schema: `docs/sqlite.md`
-- Development notes (BPF generation, tests): `docs/development.md`
+- JSONL schema: [`docs/jsonl.md`](docs/jsonl.md)
+- SQLite schema: [`docs/sqlite.md`](docs/sqlite.md)
+- Development notes (BPF generation, tests): [`docs/development.md`](docs/development.md)
 
 ## Notes
 
 - Linux kernel 5.8+ is required.
-- Running `run` typically requires root (eBPF + fanotify).
+- Running `run` typically requires root.
 - If BPF object files are missing, set `LOGIRA_EXEC_BPF_OBJ` / `LOGIRA_NET_BPF_OBJ`.
-- `--log` is deprecated: it optionally copies `events.jsonl` to a user-provided path for backward workflows.

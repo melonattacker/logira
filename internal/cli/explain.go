@@ -105,7 +105,7 @@ func explainUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintf(w, "  %s explain\n", prog)
 	fmt.Fprintf(w, "  %s explain last\n", prog)
-	fmt.Fprintf(w, "  %s explain 2026-02-14_214455_bash\n\n", prog)
+	fmt.Fprintf(w, "  %s explain 20260214-214455-bash\n\n", prog)
 
 	fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
