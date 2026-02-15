@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: (Apache-2.0 OR GPL-2.0-only)
+
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -140,4 +142,4 @@ int trace_sched_exec(void *ctx) {
     return 0;
 }
 
-char LICENSE[] SEC("license") = "GPL";
+char LICENSE[] SEC("license") = "Dual BSD/GPL";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: (Apache-2.0 OR GPL-2.0-only)
+
 #include <linux/bpf.h>
 #include <linux/in.h>
 #include <linux/in6.h>
@@ -315,4 +317,4 @@ int trace_exit_recvmsg(struct trace_event_raw_sys_exit *ctx) {
     return handle_recv_exit(ctx);
 }
 
-char LICENSE[] SEC("license") = "GPL";
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
