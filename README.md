@@ -13,6 +13,16 @@ Each run is auto-saved locally so you can review it later (`view`), search it (`
 - You want to debug surprising changes by looking at the timeline of exec/file/net activity.
 - You want lightweight, observe-only runtime monitoring during local development and testing.
 
+## Default Detections
+
+logira includes an opinionated, observe-only default ruleset aimed at auditing AI agent runs.
+
+- Credential and secrets writes: `~/.ssh`, `~/.aws`, kube/gcloud/docker config, `.netrc`, `.git-credentials`, registry creds.
+- Persistence and config changes: writes under `/etc`, systemd units, cron, user autostart entries, shell startup files.
+- Temp droppers: executable files created under `/tmp`, `/dev/shm`, `/var/tmp`.
+- Suspicious exec patterns: `curl|sh`, `wget|sh`, tunneling/reverse shell tools and flags, base64 decode with shell hints.
+- Network egress: suspicious destination ports and cloud metadata endpoint access.
+
 ## Quick Start
 
 Build:

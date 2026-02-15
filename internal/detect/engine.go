@@ -80,10 +80,8 @@ func (e *Engine) evalFileRules(rs []Rule, d model.FileDetail) []storage.Detectio
 			continue
 		}
 
-		if pref := normalizePathPrefix(expandHomeVars(w.Prefix, e.home)); pref != "" {
-			if !strings.HasPrefix(path, pref) {
-				continue
-			}
+		if !matchFilePath(*w, e.home, path) {
+			continue
 		}
 
 		if w.RequireExecBit {
@@ -124,6 +122,12 @@ func (e *Engine) evalNetRules(rs []Rule, d model.NetDetail) []storage.Detection 
 		if w.DstPortGte != nil && int(d.DstPort) < *w.DstPortGte {
 			continue
 		}
+		if len(w.DstPortIn) > 0 && !intInSlice(int(d.DstPort), w.DstPortIn) {
+			continue
+		}
+		if len(w.DstIPIn) > 0 && !stringInSlice(d.DstIP, w.DstIPIn) {
+			continue
+		}
 
 		msg := e.renderMessage(r, map[string]any{
 			"net": map[string]any{
@@ -160,6 +164,21 @@ func (e *Engine) evalExecRules(rs []Rule, d model.ExecDetail) []storage.Detectio
 				}
 				if !strings.Contains(s, strings.ToLower(needle)) {
 					ok = false
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
+		if len(w.ContainsAny) > 0 {
+			ok := false
+			for _, needle := range w.ContainsAny {
+				if needle == "" {
+					continue
+				}
+				if strings.Contains(s, strings.ToLower(needle)) {
+					ok = true
 					break
 				}
 			}
@@ -230,4 +249,49 @@ func stringInSlice(v string, ss []string) bool {
 		}
 	}
 	return false
+}
+
+func intInSlice(v int, xs []int) bool {
+	for _, x := range xs {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func matchFilePath(w FileWhen, home, path string) bool {
+	// Exact match list.
+	if len(w.PathIn) > 0 {
+		for _, p := range w.PathIn {
+			p = filepath.Clean(filepath.FromSlash(expandHomeVars(p, home)))
+			if strings.TrimSpace(p) == "" {
+				continue
+			}
+			if path == p {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Any prefix.
+	if len(w.PrefixAny) > 0 {
+		for _, p := range w.PrefixAny {
+			pref := normalizePathPrefix(expandHomeVars(p, home))
+			if pref == "" {
+				continue
+			}
+			if strings.HasPrefix(path, pref) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Single prefix (existing behavior).
+	if pref := normalizePathPrefix(expandHomeVars(w.Prefix, home)); pref != "" {
+		return strings.HasPrefix(path, pref)
+	}
+	return true
 }

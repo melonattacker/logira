@@ -80,13 +80,22 @@ func validateAndCompileRule(r *Rule) error {
 		if r.When.File == nil {
 			return fmt.Errorf("missing when.file")
 		}
+		if err := validateFileWhen(*r.When.File); err != nil {
+			return err
+		}
 	case storage.TypeNet:
 		if r.When.Net == nil {
 			return fmt.Errorf("missing when.net")
 		}
+		if err := validateNetWhen(*r.When.Net); err != nil {
+			return err
+		}
 	case storage.TypeExec:
 		if r.When.Exec == nil {
 			return fmt.Errorf("missing when.exec")
+		}
+		if err := validateExecWhen(*r.When.Exec); err != nil {
+			return err
 		}
 	}
 
@@ -106,4 +115,36 @@ func normalizeTemplate(s string) string {
 	// Convert plan.md style `{{file.path}}` to Go template style `{{.file.path}}`.
 	// This is intentionally minimal and only targets the expected namespaces.
 	return fieldTemplateRe.ReplaceAllString(s, "{{.$1.")
+}
+
+func validateFileWhen(w FileWhen) error {
+	set := 0
+	if strings.TrimSpace(w.Prefix) != "" {
+		set++
+	}
+	if len(w.PrefixAny) > 0 {
+		set++
+	}
+	if len(w.PathIn) > 0 {
+		set++
+	}
+	if set > 1 {
+		return fmt.Errorf("file.when: only one of prefix/prefix_any/path_in may be set")
+	}
+	return nil
+}
+
+func validateNetWhen(w NetWhen) error {
+	// Nothing mutually exclusive. Keep minimal guardrails.
+	for _, p := range w.DstPortIn {
+		if p < 0 || p > 65535 {
+			return fmt.Errorf("net.when: invalid dst_port_in %d", p)
+		}
+	}
+	return nil
+}
+
+func validateExecWhen(w ExecWhen) error {
+	// No exclusive rules; allow contains_all and contains_any to coexist.
+	return nil
 }

@@ -25,15 +25,20 @@ type WhenClause struct {
 
 type FileWhen struct {
 	Prefix         string   `yaml:"prefix"`
+	PrefixAny      []string `yaml:"prefix_any"`
+	PathIn         []string `yaml:"path_in"`
 	OpIn           []string `yaml:"op_in"`
 	RequireExecBit bool     `yaml:"require_exec_bit"`
 }
 
 type NetWhen struct {
-	Op         string `yaml:"op"`
-	DstPortGte *int   `yaml:"dst_port_gte"`
+	Op         string   `yaml:"op"`
+	DstPortGte *int     `yaml:"dst_port_gte"`
+	DstPortIn  []int    `yaml:"dst_port_in"`
+	DstIPIn    []string `yaml:"dst_ip_in"`
 }
 
 type ExecWhen struct {
 	ContainsAll []string `yaml:"contains_all"`
+	ContainsAny []string `yaml:"contains_any"`
 }

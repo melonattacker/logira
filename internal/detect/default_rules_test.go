@@ -19,7 +19,7 @@ func TestLoadDefaultRules(t *testing.T) {
 			t.Fatalf("expected compiled template for %s", r.ID)
 		}
 	}
-	for _, id := range []string{"R1", "R2", "R3", "R4"} {
+	for _, id := range []string{"F001", "F200", "N001", "E001"} {
 		if !seen[id] {
 			t.Fatalf("missing rule %s", id)
 		}
