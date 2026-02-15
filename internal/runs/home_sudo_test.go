@@ -93,4 +93,3 @@ func TestResolveHomeDir_UserHomeError(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
-

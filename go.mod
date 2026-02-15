@@ -5,6 +5,7 @@ go 1.22.0
 require (
 	github.com/cilium/ebpf v0.16.0
 	golang.org/x/sys v0.30.0
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.29.8
 )
 

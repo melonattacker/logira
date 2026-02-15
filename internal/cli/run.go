@@ -158,8 +158,11 @@ func RunCommand(ctx context.Context, args []string) error {
 		_ = runs.BestEffortChownTreeToSudoUser(runDir)
 	}()
 
-	homeDir, _ := os.UserHomeDir()
-	detector := detect.NewEngine(homeDir)
+	actorHomeDir, err := runs.ActorHomeDir()
+	if err != nil {
+		actorHomeDir, _ = os.UserHomeDir()
+	}
+	detector := detect.NewEngine(actorHomeDir)
 
 	events := make(chan collector.Event, 4096)
 	if err := col.Start(ctx, events); err != nil {

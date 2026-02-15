@@ -1,0 +1,40 @@
+rules:
+  - id: "R1"
+    title: "Write under ~/.ssh"
+    type: "file"
+    severity: "high"
+    when:
+      file:
+        prefix: "$HOME/.ssh/"
+        op_in: ["create", "modify"]
+    message: "write under ~/.ssh: {{file.path}}"
+
+  - id: "R2"
+    title: "Executable created under /tmp"
+    type: "file"
+    severity: "medium"
+    when:
+      file:
+        prefix: "/tmp/"
+        op_in: ["create", "modify"]
+        require_exec_bit: true
+    message: "executable file under /tmp: {{file.path}}"
+
+  - id: "R3"
+    title: "Outbound connect to high port"
+    type: "net"
+    severity: "low"
+    when:
+      net:
+        op: "connect"
+        dst_port_gte: 1024
+    message: "outbound connect to high port {{net.dst_ip}}:{{net.dst_port}}"
+
+  - id: "R4"
+    title: "Possible curl|sh execution pattern"
+    type: "exec"
+    severity: "high"
+    when:
+      exec:
+        contains_all: ["curl", "|", "sh"]
+    message: "possible curl|sh execution pattern: {{exec.filename}}"
