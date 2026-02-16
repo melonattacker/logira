@@ -12,30 +12,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf/rlimit"
 	collector "github.com/melonattacker/logira/collector/common"
 	exectrace "github.com/melonattacker/logira/collector/linux/exec"
-	filewatcher "github.com/melonattacker/logira/collector/linux/file"
+	filetrace "github.com/melonattacker/logira/collector/linux/filetrace"
 	nettrace "github.com/melonattacker/logira/collector/linux/net"
 )
 
 type LinuxCollector struct {
 	cfg collector.Config
 
-	execTracer  *exectrace.Tracer
-	netTracer   *nettrace.Tracer
-	fileWatcher *filewatcher.Watcher
-
-	rootPID atomic.Int32
-
-	mu       sync.Mutex
-	tracked  map[int]struct{}
-	out      chan<- collector.Event
-	bootExec []collector.Event
+	execTracer *exectrace.Tracer
+	netTracer  *nettrace.Tracer
+	fileTracer *filetrace.Tracer
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -55,11 +46,11 @@ func NewCollector(cfg collector.Config) *LinuxCollector {
 		cfg.WatchPaths = []string{"."}
 	}
 
-	return &LinuxCollector{cfg: cfg, tracked: make(map[int]struct{})}
+	return &LinuxCollector{cfg: cfg}
 }
 
 func (lc *LinuxCollector) Init(ctx context.Context) error {
-	if lc.cfg.EnableExec || lc.cfg.EnableNet {
+	if lc.cfg.EnableExec || lc.cfg.EnableNet || lc.cfg.EnableFile {
 		// eBPF map creation is constrained by RLIMIT_MEMLOCK on many systems.
 		// This typically requires root or CAP_SYS_RESOURCE.
 		if err := rlimit.RemoveMemlock(); err != nil {
@@ -80,9 +71,9 @@ func (lc *LinuxCollector) Init(ctx context.Context) error {
 		}
 	}
 	if lc.cfg.EnableFile {
-		lc.fileWatcher = filewatcher.NewWatcher(filewatcher.Config{WatchPaths: lc.cfg.WatchPaths, HashMaxBytes: lc.cfg.HashMaxBytes})
-		if err := lc.fileWatcher.Init(ctx); err != nil {
-			return fmt.Errorf("init file watcher: %w", err)
+		lc.fileTracer = filetrace.NewTracer()
+		if err := lc.fileTracer.Init(ctx); err != nil {
+			return fmt.Errorf("init file tracer: %w", err)
 		}
 	}
 	return nil
@@ -91,9 +82,6 @@ func (lc *LinuxCollector) Init(ctx context.Context) error {
 func (lc *LinuxCollector) Start(ctx context.Context, out chan<- collector.Event) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	lc.cancel = cancel
-	lc.mu.Lock()
-	lc.out = out
-	lc.mu.Unlock()
 
 	if lc.execTracer != nil {
 		execCh, err := lc.execTracer.Start(runCtx)
@@ -128,8 +116,8 @@ func (lc *LinuxCollector) Start(ctx context.Context, out chan<- collector.Event)
 		}()
 	}
 
-	if lc.fileWatcher != nil {
-		fileCh, err := lc.fileWatcher.Start(runCtx)
+	if lc.fileTracer != nil {
+		fileCh, err := lc.fileTracer.Start(runCtx)
 		if err != nil {
 			cancel()
 			if lc.execTracer != nil {
@@ -156,10 +144,6 @@ func (lc *LinuxCollector) Stop(ctx context.Context) error {
 	if lc.cancel != nil {
 		lc.cancel()
 	}
-	lc.mu.Lock()
-	lc.out = nil
-	lc.bootExec = nil
-	lc.mu.Unlock()
 
 	var errs []error
 	// Stop underlying readers first so their output channels close and the
@@ -174,8 +158,8 @@ func (lc *LinuxCollector) Stop(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
-	if lc.fileWatcher != nil {
-		if err := lc.fileWatcher.Stop(ctx); err != nil {
+	if lc.fileTracer != nil {
+		if err := lc.fileTracer.Stop(ctx); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -195,39 +179,13 @@ func (lc *LinuxCollector) Stop(ctx context.Context) error {
 }
 
 func (lc *LinuxCollector) SetTargetPID(pid int) {
-	if pid <= 0 {
-		return
-	}
-	lc.rootPID.Store(int32(pid))
-	lc.trackPID(pid)
-
-	lc.mu.Lock()
-	pending := lc.bootExec
-	lc.bootExec = nil
-	out := lc.out
-	lc.mu.Unlock()
-
-	if out != nil {
-		for _, ev := range pending {
-			lc.handleEvent(out, ev)
-		}
-	}
+	// No-op in daemon mode. Kept for backward compatibility with older tests/callers.
+	_ = pid
 }
 
 func (lc *LinuxCollector) WaitForIdle(ctx context.Context) error {
-	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
-
-	for {
-		if lc.activeTrackedCount() == 0 {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-t.C:
-		}
-	}
+	_ = ctx
+	return nil
 }
 
 func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.Event) {
@@ -235,30 +193,11 @@ func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.E
 		ev.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 
-	// During bootstrap we don't yet know the target PID. Buffer early exec events
-	// so we don't race and drop the target's initial sched_process_exec event.
-	if ev.Type == collector.EventTypeExec && ev.PID > 0 && lc.rootPID.Load() <= 0 {
-		lc.mu.Lock()
-		if lc.rootPID.Load() <= 0 && len(lc.bootExec) < 512 {
-			lc.bootExec = append(lc.bootExec, ev)
-			lc.mu.Unlock()
-			return
-		}
-		lc.mu.Unlock()
-	}
-
-	if ev.PID > 0 && !lc.isRelevantPID(ev.PID) {
-		return
-	}
-
 	if ev.Type == collector.EventTypeExec {
 		if ev.PPID <= 0 && ev.PID > 0 {
 			ev.PPID = procPPID(ev.PID)
 		}
 		ev = lc.enrichExecCWD(ev)
-		if ev.PID > 0 {
-			lc.trackPID(ev.PID)
-		}
 	}
 
 	select {
@@ -295,90 +234,6 @@ func (lc *LinuxCollector) enrichExecCWD(ev collector.Event) collector.Event {
 	}
 	ev.Detail = b
 	return ev
-}
-
-func (lc *LinuxCollector) trackPID(pid int) {
-	if pid <= 0 {
-		return
-	}
-	lc.mu.Lock()
-	lc.tracked[pid] = struct{}{}
-	lc.mu.Unlock()
-}
-
-func (lc *LinuxCollector) isRelevantPID(pid int) bool {
-	if pid <= 0 {
-		return true
-	}
-	lc.mu.Lock()
-	_, ok := lc.tracked[pid]
-	lc.mu.Unlock()
-	if ok {
-		return true
-	}
-
-	root := int(lc.rootPID.Load())
-	if root <= 0 {
-		return false
-	}
-
-	chain, isChild := isDescendantOf(pid, root)
-	if isChild {
-		lc.mu.Lock()
-		for _, p := range chain {
-			lc.tracked[p] = struct{}{}
-		}
-		lc.mu.Unlock()
-	}
-	return isChild
-}
-
-func (lc *LinuxCollector) activeTrackedCount() int {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
-
-	count := 0
-	for pid := range lc.tracked {
-		if processAlive(pid) {
-			count++
-			continue
-		}
-		delete(lc.tracked, pid)
-	}
-	return count
-}
-
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
-}
-
-func isDescendantOf(pid, root int) ([]int, bool) {
-	if pid <= 0 || root <= 0 {
-		return nil, false
-	}
-	chain := []int{pid}
-	seen := map[int]struct{}{pid: {}}
-	cur := pid
-	for i := 0; i < 128; i++ {
-		if cur == root {
-			return chain, true
-		}
-		ppid := procPPID(cur)
-		if ppid <= 0 || ppid == cur {
-			return nil, false
-		}
-		if _, dup := seen[ppid]; dup {
-			return nil, false
-		}
-		seen[ppid] = struct{}{}
-		chain = append(chain, ppid)
-		cur = ppid
-	}
-	return nil, false
 }
 
 func procPPID(pid int) int {

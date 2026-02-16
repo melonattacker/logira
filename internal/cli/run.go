@@ -10,17 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
+	"syscall"
 	"time"
 
-	"github.com/melonattacker/logira/collector"
-	"github.com/melonattacker/logira/internal/cgroupv2"
-	"github.com/melonattacker/logira/internal/detect"
-	"github.com/melonattacker/logira/internal/model"
+	"github.com/melonattacker/logira/internal/ipc"
 	"github.com/melonattacker/logira/internal/runs"
-	"github.com/melonattacker/logira/internal/storage"
 )
 
 func RunCommand(ctx context.Context, args []string) error {
@@ -61,9 +56,9 @@ func RunCommand(ctx context.Context, args []string) error {
 	fs.BoolVar(&enableNet, "net", true, "enable network tracing")
 	fs.IntVar(&argvMax, "argv-max", 20, "max argv entries")
 	fs.IntVar(&argvMaxBytes, "argv-max-bytes", 256, "max bytes per argv entry")
-	fs.Int64Var(&hashMaxBytes, "hash-max-bytes", 10*1024*1024, "max bytes hashed per file")
-	fs.BoolVar(&waitChildren, "wait-children", true, "wait until child process tree exits")
-	fs.DurationVar(&waitChildrenTimeout, "wait-children-timeout", 5*time.Second, "max wait for child tree drain")
+	fs.Int64Var(&hashMaxBytes, "hash-max-bytes", 10*1024*1024, "max bytes hashed per file (legacy; may be ignored)")
+	fs.BoolVar(&waitChildren, "wait-children", true, "wait until cgroup process tree exits")
+	fs.DurationVar(&waitChildrenTimeout, "wait-children-timeout", 5*time.Second, "max wait for cgroup to drain")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
@@ -98,172 +93,91 @@ func RunCommand(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	runDir := runs.RunDir(home, runID)
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", runDir, err)
-	}
-	// When invoked via sudo, store under the invoking user's home and make the
-	// run directory usable from non-root `logira query/view`.
-	_ = runs.BestEffortChownTreeToSudoUser(runDir)
 
 	cwd, _ := os.Getwd()
-	startTS := now.UTC().UnixNano()
-	meta := runs.Meta{
-		RunID:       runID,
-		StartTS:     startTS,
-		Tool:        runs.SanitizeTool(tool),
-		Command:     strings.Join(cmdArgs, " "),
-		CommandArgv: append([]string{}, cmdArgs...),
-		CWD:         cwd,
-		WatchPaths:  append([]string{}, watch...),
-		Version:     2,
-	}
-	if err := runs.WriteMeta(runDir, meta); err != nil {
-		return err
-	}
 
-	cfg := collector.Config{
-		EnableExec:   enableExec,
-		EnableFile:   enableFile,
-		EnableNet:    enableNet,
-		WatchPaths:   watch,
+	cliSock := ipc.SockPath()
+	client, err := ipc.Dial(ctx)
+	if err != nil {
+		return fmt.Errorf("connect logirad (%s): %w", cliSock, err)
+	}
+	defer client.Close()
+
+	startReq := ipc.StartRunRequest{
+		RunID:      runID,
+		Tool:       tool,
+		CmdArgv:    append([]string{}, cmdArgs...),
+		CWD:        cwd,
+		LogiraHome: home,
+
+		EnableExec: enableExec,
+		EnableFile: enableFile,
+		EnableNet:  enableNet,
+
+		WatchPaths:   append([]string{}, watch...),
 		ArgvMax:      argvMax,
 		ArgvMaxBytes: argvMaxBytes,
 		HashMaxBytes: hashMaxBytes,
 	}
 
-	col := collector.New(cfg)
-	if err := col.Init(ctx); err != nil {
-		return err
-	}
-
-	metaJSONBytes, _ := json.Marshal(meta)
-	store, err := storage.Open(storage.OpenParams{
-		RunID:    runID,
-		RunDir:   runDir,
-		StartTS:  startTS,
-		Command:  meta.Command,
-		Tool:     meta.Tool,
-		MetaJSON: string(metaJSONBytes),
-	})
+	startResp, err := client.StartRun(ctx, startReq)
 	if err != nil {
 		return err
 	}
-	storeClosed := false
-	defer func() {
-		if storeClosed {
-			return
-		}
-		_ = store.Close(storage.NowUnixNanos(), string(metaJSONBytes))
-		_ = runs.BestEffortChownTreeToSudoUser(runDir)
-	}()
 
-	actorHomeDir, err := runs.ActorHomeDir()
+	// Run the audited command via an internal helper which joins the cgroup
+	// before exec to avoid missing the first exec event.
+	self, err := os.Executable()
 	if err != nil {
-		actorHomeDir, _ = os.UserHomeDir()
-	}
-	detector := detect.NewEngine(actorHomeDir)
-
-	events := make(chan collector.Event, 4096)
-	if err := col.Start(ctx, events); err != nil {
 		return err
 	}
+	helperArgs := []string{
+		"_exec_in_cgroup",
+		"--cgroup-path", startResp.CgroupPath,
+		"--session-id", startResp.SessionID,
+		"--",
+	}
+	helperArgs = append(helperArgs, cmdArgs...)
 
-	var writerWG sync.WaitGroup
-	writerWG.Add(1)
-	var writerErr error
-	var writerMu sync.Mutex
-	go func() {
-		defer writerWG.Done()
-		for ev := range events {
-			if err := handleObservedEvent(store, detector, runID, ev); err != nil {
-				writerMu.Lock()
-				if writerErr == nil {
-					writerErr = err
-				}
-				writerMu.Unlock()
-				return
-			}
-		}
-	}()
-
-	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+	cmd := exec.CommandContext(ctx, self, helperArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 
-	var cg *cgroupv2.Cgroup
-	if runtime.GOOS == "linux" && cgroupv2.Available() {
-		if c, err := cgroupv2.Create(runID); err == nil {
-			cg = c
-			meta.CgroupPath = c.Path
-			_ = runs.WriteMeta(runDir, meta)
-		}
-	}
-
 	if err := cmd.Start(); err != nil {
-		_ = col.Stop(context.Background())
-		close(events)
-		writerWG.Wait()
+		_ = client.StopRun(context.Background(), startResp.SessionID, 127)
 		return fmt.Errorf("start agent command: %w", err)
 	}
 
-	if cg != nil {
-		_ = cg.JoinPID(cmd.Process.Pid)
-	}
-	if setter, ok := col.(collector.TargetSetter); ok {
-		setter.SetTargetPID(cmd.Process.Pid)
-	}
-
 	waitErr := cmd.Wait()
+	exitCode := exitCodeFromErr(waitErr)
 
 	if waitChildren {
-		if waiter, ok := col.(collector.ChildWaiter); ok {
-			drainCtx, cancel := context.WithTimeout(context.Background(), waitChildrenTimeout)
-			_ = waiter.WaitForIdle(drainCtx)
-			cancel()
+		drainCtx, cancel := context.WithTimeout(context.Background(), waitChildrenTimeout)
+		_ = waitForCgroupEmpty(drainCtx, startResp.CgroupPath)
+		cancel()
+	}
+
+	_ = client.StopRun(context.Background(), startResp.SessionID, exitCode)
+
+	// Best-effort: read meta for suspicious_count.
+	sus := 0
+	if b, err := os.ReadFile(runs.MetaPath(startResp.RunDir)); err == nil {
+		var m runs.Meta
+		if json.Unmarshal(b, &m) == nil {
+			sus = m.SuspiciousCount
 		}
-	}
-	time.Sleep(500 * time.Millisecond)
-
-	stopErr := col.Stop(context.Background())
-	close(events)
-	writerWG.Wait()
-
-	writerMu.Lock()
-	werr := writerErr
-	writerMu.Unlock()
-	if werr != nil {
-		return fmt.Errorf("write events: %w", werr)
-	}
-
-	endTS := storage.NowUnixNanos()
-	meta.EndTS = endTS
-	meta.SuspiciousCount = store.SuspiciousCount()
-	metaJSONBytes, _ = json.Marshal(meta)
-	_ = runs.WriteMeta(runDir, meta)
-	_ = store.Close(endTS, string(metaJSONBytes))
-	storeClosed = true
-
-	if cg != nil {
-		_ = cg.Remove()
 	}
 
 	if strings.TrimSpace(logPath) != "" {
-		_ = copyFile(filepath.Join(runDir, "events.jsonl"), logPath)
+		_ = copyFile(filepath.Join(startResp.RunDir, "events.jsonl"), logPath)
 	}
 
-	fmt.Fprintf(os.Stderr, "run_id=%s dir=%s suspicious=%d\n", runID, runDir, meta.SuspiciousCount)
+	fmt.Fprintf(os.Stderr, "run_id=%s dir=%s suspicious=%d\n", runID, startResp.RunDir, sus)
 
 	if waitErr != nil {
-		if stopErr != nil {
-			return fmt.Errorf("command failed: %v (collector stop error: %v)", waitErr, stopErr)
-		}
 		return waitErr
-	}
-	if stopErr != nil {
-		return stopErr
 	}
 	return nil
 }
@@ -272,92 +186,35 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
 	fmt.Fprintf(w, "%s run: run a command under audit (auto-saves a run)\n\n", prog)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  sudo %s run [flags] -- <agent command...>\n\n", prog)
+	fmt.Fprintf(w, "  %s run [flags] -- <agent command...>\n\n", prog)
 
 	fmt.Fprintln(w, "Notes:")
+	fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
 	fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
 	fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  sudo %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
-	fmt.Fprintf(w, "  sudo %s run --watch . --watch /etc -- bash -lc 'cat /etc/hosts >/dev/null'\n", prog)
-	fmt.Fprintf(w, "  sudo %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
+	fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  %s run --watch . --watch /etc -- bash -lc 'echo hi > x.txt; cat /etc/hosts >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
 	fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
 
-func handleObservedEvent(store *storage.Store, detector *detect.Engine, runID string, ev collector.Event) error {
-	typ := storage.EventType(ev.Type)
-	switch typ {
-	case storage.TypeExec, storage.TypeFile, storage.TypeNet:
-	default:
-		return nil
+func exitCodeFromErr(err error) int {
+	if err == nil {
+		return 0
 	}
-
-	ts := storage.NowUnixNanos()
-
-	var summary string
-	var attrs storage.EventRow
-
-	switch typ {
-	case storage.TypeExec:
-		var d model.ExecDetail
-		_ = json.Unmarshal(ev.Detail, &d)
-		summary = execSummary(d)
-		attrs.Exe = d.Filename
-	case storage.TypeFile:
-		var d model.FileDetail
-		_ = json.Unmarshal(ev.Detail, &d)
-		summary = fmt.Sprintf("file %s %s", d.Op, d.Path)
-		attrs.Path = d.Path
-	case storage.TypeNet:
-		var d model.NetDetail
-		_ = json.Unmarshal(ev.Detail, &d)
-		summary = fmt.Sprintf("net %s %s:%d bytes=%d", d.Op, d.DstIP, d.DstPort, d.Bytes)
-		attrs.DstIP = d.DstIP
-		attrs.DstPort = int(d.DstPort)
-	}
-
-	seq, err := store.AppendObserved(ts, typ, ev.PID, ev.PPID, ev.UID, summary, ev.Detail, attrs)
-	if err != nil {
-		return err
-	}
-
-	for _, det := range detector.Evaluate(typ, ev.Detail) {
-		_, _ = store.AppendDetection(storage.NowUnixNanos(), det, seq)
-	}
-	return nil
-}
-
-func execSummary(d model.ExecDetail) string {
-	if len(d.Argv) > 0 {
-		head := d.Argv
-		if len(head) > 3 {
-			head = head[:3]
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if st, ok := ee.Sys().(syscall.WaitStatus); ok {
+			if st.Signaled() {
+				return 128 + int(st.Signal())
+			}
+			return st.ExitStatus()
 		}
-		return "exec " + strings.Join(head, " ")
 	}
-	if d.Filename != "" {
-		return "exec " + d.Filename
-	}
-	return "exec <unknown>"
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return out.Close()
+	return 1
 }

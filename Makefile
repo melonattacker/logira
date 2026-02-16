@@ -19,6 +19,7 @@ endif
 
 build:
 	GOCACHE=$(GOCACHE_DIR) go build ./cmd/logira
+	GOCACHE=$(GOCACHE_DIR) go build ./cmd/logirad
 
 test:
 	GOCACHE=$(GOCACHE_DIR) go test ./...
@@ -26,3 +27,4 @@ test:
 generate:
 	cd collector/linux/exec && GOCACHE=$(GOCACHE_DIR) $(BPF2GO) -go-package exectrace -cc clang -cflags "-O2 -g -Wall" trace _trace.bpf.c -- $(BPF_INCLUDES)
 	cd collector/linux/net && GOCACHE=$(GOCACHE_DIR) $(BPF2GO) -go-package nettrace -cc clang -cflags "-O2 -g -Wall" trace _trace.bpf.c -- $(BPF_INCLUDES)
+	cd collector/linux/filetrace && GOCACHE=$(GOCACHE_DIR) $(BPF2GO) -go-package filetrace -cc clang -cflags "-O2 -g -Wall" trace _trace.bpf.c -- $(BPF_INCLUDES)

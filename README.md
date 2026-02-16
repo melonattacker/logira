@@ -31,22 +31,30 @@ Build:
 make build
 ```
 
-Run an agent under audit (events are auto-saved):
+Start the root daemon (required for tracing):
 
 ```bash
-sudo ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'
+sudo ./logirad
+```
+
+If you run `logirad` via systemd, set BPF object paths via environment (or place the `collector/linux/*/trace_bpf*.o` files in a location `logirad` can find). See `packaging/systemd/logirad.service`.
+
+Run an agent under audit as your normal user (events are auto-saved):
+
+```bash
+./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'
 ```
 
 Run Codex CLI:
 
 ```bash
-sudo ./logira run -- codex --yolo "Update the README to be clearer and add examples."
+./logira run -- codex --yolo "Update the README to be clearer and add examples."
 ```
 
 Run Claude Code CLI:
 
 ```bash
-sudo ./logira run -- claude --dangerously-skip-permissions "Find and fix flaky tests."
+./logira run -- claude --dangerously-skip-permissions "Find and fix flaky tests."
 ```
 
 List runs:
@@ -103,5 +111,5 @@ Each run is stored at:
 ## Notes
 
 - Linux kernel 5.8+ is required.
-- Running `run` typically requires root.
-- If BPF object files are missing, set `LOGIRA_EXEC_BPF_OBJ` / `LOGIRA_NET_BPF_OBJ`.
+- Tracing requires the root daemon `logirad` to be running; `logira run` itself does not require sudo.
+- If BPF object files are missing, set `LOGIRA_EXEC_BPF_OBJ` / `LOGIRA_NET_BPF_OBJ` / `LOGIRA_FILE_BPF_OBJ`.

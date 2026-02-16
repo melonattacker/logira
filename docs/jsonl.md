@@ -53,11 +53,7 @@ Common fields:
   "data_json": {
     "op": "modify",
     "path": "/workspace/x.txt",
-    "size_before": 0,
-    "size_after": 3,
-    "hash_before": "",
-    "hash_after": "…",
-    "hash_truncated": false
+    "cgroup_id": 4567890123
   }
 }
 ```
@@ -65,9 +61,10 @@ Common fields:
 `data_json` fields (best-effort):
 - `op`: `create` | `modify` | `delete`
 - `path`: affected path
-- `size_before`, `size_after`: bytes (if known)
-- `hash_before`, `hash_after`: SHA-256 (best effort)
-- `hash_truncated`: true when hashing was capped by `--hash-max-bytes`
+- `cgroup_id`: kernel cgroup id if available
+- `size_before`, `size_after`: bytes (if known; may be absent)
+- `hash_before`, `hash_after`: SHA-256 (best-effort; may be absent)
+- `hash_truncated`: true when hashing was capped by `--hash-max-bytes` (may be absent)
 
 ## Net Event (`type=net`)
 

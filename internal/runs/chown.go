@@ -35,6 +35,15 @@ func BestEffortChownTreeToSudoUser(path string) error {
 	return bestEffortChownTree(path, uid, gid)
 }
 
+// BestEffortChownTree chowns path (recursively) to uid/gid.
+// It is intentionally best-effort: failures are ignored unless traversal itself fails.
+func BestEffortChownTree(path string, uid, gid int) error {
+	if uid <= 0 || gid <= 0 {
+		return nil
+	}
+	return bestEffortChownTree(path, uid, gid)
+}
+
 func bestEffortChownTree(root string, uid, gid int) error {
 	info, err := os.Lstat(root)
 	if err != nil {

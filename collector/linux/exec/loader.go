@@ -84,6 +84,15 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 			filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
 			filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
 		}
+		if exe, err := os.Executable(); err == nil {
+			exeDir := filepath.Dir(exe)
+			for _, p := range []string{
+				filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
+				filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
+			} {
+				tried = append(tried, filepath.Join(exeDir, p))
+			}
+		}
 		objPath = firstExistingPath(tried...)
 		if objPath == "" {
 			return nil, fmt.Errorf(

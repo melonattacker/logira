@@ -128,7 +128,8 @@ Override paths with:
 ### Manual smoke test
 - Build: `make build`
 - Run:
-  - `sudo ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
+  - `sudo ./logirad`
+  - `./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'`
   - `./logira view last`
   - `./logira query --run last --type detection`
 

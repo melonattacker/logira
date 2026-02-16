@@ -17,6 +17,7 @@ type FileDetail struct {
 	HashBefore    string `json:"hash_before,omitempty"`
 	HashAfter     string `json:"hash_after,omitempty"`
 	HashTruncated bool   `json:"hash_truncated,omitempty"`
+	CgroupID      uint64 `json:"cgroup_id,omitempty"`
 }
 
 type NetDetail struct {

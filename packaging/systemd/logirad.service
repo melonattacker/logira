@@ -1,0 +1,21 @@
+[Unit]
+Description=logira root audit daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/logirad
+Restart=on-failure
+RestartSec=1
+
+# Optional environment (paths, socket override, etc).
+EnvironmentFile=-/etc/logira/logirad.env
+
+# Allow managing delegated cgroup v2 subtrees.
+Delegate=yes
+
+# Place runtime state under /run/logira (socket itself is /run/logira.sock).
+RuntimeDirectory=logira
+
+[Install]
+WantedBy=multi-user.target
