@@ -2,3 +2,4 @@ demos/*_test.jsonl
 .cache/
 logira
 logirad
+!internal/logirad/
