@@ -37,7 +37,46 @@ Start the root daemon (required for tracing):
 sudo ./logirad
 ```
 
-If you run `logirad` via systemd, set BPF object paths via environment (or place the `collector/linux/*/trace_bpf*.o` files in a location `logirad` can find). See `packaging/systemd/logirad.service`.
+<details>
+<summary>How to run `logirad` via systemd</summary>
+
+To run the root daemon in the background, install the unit file from `packaging/systemd/logirad.service`.
+
+```bash
+# 1) Generate eBPF objects (only needed if missing)
+make generate
+
+# 2) Install the systemd unit
+sudo install -D -m 0644 packaging/systemd/logirad.service /etc/systemd/system/logirad.service
+
+# 3) Install the daemon binary (unit defaults to /usr/local/bin/logirad)
+sudo install -m 0755 ./logirad /usr/local/bin/logirad
+
+# 4) (Recommended) Point systemd at the eBPF .o files via an environment file.
+# This avoids relying on the service working directory.
+sudo mkdir -p /etc/logira
+sudo tee /etc/logira/logirad.env >/dev/null <<'EOF'
+LOGIRA_EXEC_BPF_OBJ=/absolute/path/to/collector/linux/exec/trace_bpfel.o
+LOGIRA_NET_BPF_OBJ=/absolute/path/to/collector/linux/net/trace_bpfel.o
+LOGIRA_FILE_BPF_OBJ=/absolute/path/to/collector/linux/filetrace/trace_bpfel.o
+EOF
+
+# 5) Enable + start
+sudo systemctl daemon-reload
+sudo systemctl enable --now logirad
+
+# Follow logs
+sudo journalctl -u logirad -f
+
+# Check status
+systemctl status logirad --no-pager
+
+# Stop + disable
+sudo systemctl stop logirad
+sudo systemctl disable --now logirad
+```
+</details>
+
 
 Run an agent under audit as your normal user (events are auto-saved):
 
