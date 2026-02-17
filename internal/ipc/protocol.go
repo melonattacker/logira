@@ -16,6 +16,8 @@ const (
 	MsgTypeStartRunOK = "start_run_ok"
 	MsgTypeStopRun    = "stop_run"
 	MsgTypeAttachPID  = "attach_pid"
+	MsgTypeStatus     = "status"
+	MsgTypeStatusOK   = "status_ok"
 	MsgTypeOK         = "ok"
 	MsgTypeError      = "error"
 )
@@ -75,6 +77,22 @@ type OKResponse struct {
 type ErrorResponse struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+type StatusRequest struct {
+	Type string `json:"type"`
+}
+
+type StatusResponse struct {
+	Type string `json:"type"`
+
+	PID int `json:"pid"`
+	UID int `json:"uid"`
+	GID int `json:"gid"`
+
+	EnableExec bool `json:"enable_exec"`
+	EnableFile bool `json:"enable_file"`
+	EnableNet  bool `json:"enable_net"`
 }
 
 func DecodeType(line []byte) (string, error) {

@@ -20,14 +20,22 @@ import (
 type Server struct {
 	sockPath string
 
+	cfg ServerConfig
+
 	mu       sync.Mutex
 	sessions *SessionManager
 
 	ln *net.UnixListener
 }
 
-func NewServer(sockPath string, sessions *SessionManager) *Server {
-	return &Server{sockPath: sockPath, sessions: sessions}
+type ServerConfig struct {
+	EnableExec bool
+	EnableFile bool
+	EnableNet  bool
+}
+
+func NewServer(sockPath string, sessions *SessionManager, cfg ServerConfig) *Server {
+	return &Server{sockPath: sockPath, sessions: sessions, cfg: cfg}
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -126,6 +134,18 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 			return
 		}
 		_, _ = c.Write(ipc.MustLine(ipc.OKResponse{Type: ipc.MsgTypeOK}))
+	case ipc.MsgTypeStatus:
+		// No request fields beyond type.
+		resp := ipc.StatusResponse{
+			Type:       ipc.MsgTypeStatusOK,
+			PID:        os.Getpid(),
+			UID:        os.Geteuid(),
+			GID:        os.Getegid(),
+			EnableExec: s.cfg.EnableExec,
+			EnableFile: s.cfg.EnableFile,
+			EnableNet:  s.cfg.EnableNet,
+		}
+		_, _ = c.Write(ipc.MustLine(resp))
 	default:
 		_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("unknown message type %q", typ)))
 	}

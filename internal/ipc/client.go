@@ -111,3 +111,16 @@ func (c *Client) AttachPID(ctx context.Context, sessionID string, pid int) error
 	}
 	return nil
 }
+
+func (c *Client) Status(ctx context.Context) (StatusResponse, error) {
+	req := StatusRequest{Type: MsgTypeStatus}
+	var resp StatusResponse
+	err := c.roundTrip(ctx, req, &resp)
+	if err != nil {
+		return StatusResponse{}, err
+	}
+	if strings.TrimSpace(resp.Type) != MsgTypeStatusOK {
+		return StatusResponse{}, fmt.Errorf("unexpected response type %q", resp.Type)
+	}
+	return resp, nil
+}

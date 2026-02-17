@@ -1,5 +1,5 @@
 demos/*_test.jsonl
 .cache/
-logira
-logirad
+/logira
+/logirad
 !internal/logirad/
