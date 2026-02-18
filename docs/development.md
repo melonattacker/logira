@@ -8,6 +8,7 @@ This doc is for contributors.
 - Root (or appropriate capabilities) to run tracers (via `logirad`)
 - Go 1.22+
 - clang/llvm to regenerate eBPF objects
+- libbpf development headers to build eBPF programs (e.g. `libbpf-dev` on Ubuntu)
 - Linux UAPI headers (if you see missing `asm/types.h`, install your distro's libc/kernel headers packages)
 
 ## Build

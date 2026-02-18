@@ -80,7 +80,7 @@ jobs:
       - name: Install build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm libelf-dev linux-libc-dev
+          sudo apt-get install -y clang llvm libelf-dev libbpf-dev linux-libc-dev
 
       - name: Generate BPF objects
         run: make generate
