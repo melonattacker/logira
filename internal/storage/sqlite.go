@@ -17,12 +17,12 @@ type SQLite struct {
 }
 
 func OpenSQLite(path string) (*SQLite, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
 	// Some environments restrict SQLite creating new files under $HOME, but allow
 	// opening an existing file. Pre-create the DB file to avoid SQLITE_CANTOPEN.
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("precreate sqlite db %s: %w", path, err)
 	}

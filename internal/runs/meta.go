@@ -29,7 +29,7 @@ func WriteMeta(runDir string, m Meta) error {
 		return err
 	}
 	tmp := filepath.Join(runDir, "meta.json.tmp")
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return fmt.Errorf("write meta tmp: %w", err)
 	}
 	if err := os.Rename(tmp, MetaPath(runDir)); err != nil {

@@ -51,7 +51,8 @@ func bestEffortChownTree(root string, uid, gid int) error {
 	}
 	// If root is a file, just chown it.
 	if !info.IsDir() {
-		_ = os.Chown(root, uid, gid)
+		// Use Lchown so symlinks cannot be abused to chown arbitrary targets.
+		_ = os.Lchown(root, uid, gid)
 		return nil
 	}
 
@@ -64,7 +65,8 @@ func bestEffortChownTree(root string, uid, gid int) error {
 		}
 		// Ignore per-file chown errors. Root should normally succeed, but we
 		// prefer usability over failing the whole run.
-		_ = os.Chown(p, uid, gid)
+		// Use Lchown so symlinks cannot be abused to chown arbitrary targets.
+		_ = os.Lchown(p, uid, gid)
 		return nil
 	})
 	if walkErr != nil && !errors.Is(walkErr, os.ErrNotExist) {

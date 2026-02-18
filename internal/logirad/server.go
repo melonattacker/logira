@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -87,8 +88,8 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 		return
 	}
 
-	r := bufio.NewReaderSize(c, 1<<20)
-	line, err := r.ReadBytes('\n')
+	r := bufio.NewReaderSize(c, 32<<10)
+	line, err := readLineLimited(r, 1<<20) // 1 MiB cap
 	if err != nil {
 		_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("read: %v", err)))
 		return
@@ -148,5 +149,26 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 		_, _ = c.Write(ipc.MustLine(resp))
 	default:
 		_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("unknown message type %q", typ)))
+	}
+}
+
+func readLineLimited(r *bufio.Reader, max int) ([]byte, error) {
+	if max <= 0 {
+		return nil, fmt.Errorf("invalid max %d", max)
+	}
+	var out []byte
+	for {
+		frag, err := r.ReadSlice('\n')
+		out = append(out, frag...)
+		if len(out) > max {
+			return nil, fmt.Errorf("message too large (>%d bytes)", max)
+		}
+		if err == nil {
+			return out, nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		return nil, err
 	}
 }

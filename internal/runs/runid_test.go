@@ -21,7 +21,7 @@ func TestSanitizeTool(t *testing.T) {
 
 func TestNewRunID_Unique(t *testing.T) {
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "runs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, "runs"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 2, 14, 1, 2, 3, 0, time.UTC)
@@ -32,7 +32,7 @@ func TestNewRunID_Unique(t *testing.T) {
 	if id1 != "20260214-010203-tool" {
 		t.Fatalf("id1=%q", id1)
 	}
-	if err := os.MkdirAll(filepath.Join(home, "runs", id1), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, "runs", id1), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	id2, err := NewRunID(home, "tool", now)
@@ -41,5 +41,34 @@ func TestNewRunID_Unique(t *testing.T) {
 	}
 	if id2 != "20260214-010203-tool-2" {
 		t.Fatalf("id2=%q", id2)
+	}
+}
+
+func TestValidateRunID(t *testing.T) {
+	ok := []string{
+		"20260214-010203-tool",
+		"abc-123_DEF.ghi",
+	}
+	for _, id := range ok {
+		if err := ValidateRunID(id); err != nil {
+			t.Fatalf("ValidateRunID(%q) unexpected err: %v", id, err)
+		}
+	}
+
+	bad := []string{
+		"",
+		".",
+		"..",
+		"../x",
+		"..\\x",
+		"a/b",
+		"a\\b",
+		" has space ",
+		"nul\x00byte",
+	}
+	for _, id := range bad {
+		if err := ValidateRunID(id); err == nil {
+			t.Fatalf("ValidateRunID(%q) expected err", id)
+		}
 	}
 }

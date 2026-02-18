@@ -23,6 +23,11 @@ import (
 	"github.com/melonattacker/logira/internal/storage"
 )
 
+const (
+	maxSessionsTotal  = 128
+	maxSessionsPerUID = 8
+)
+
 type SessionManager struct {
 	collector collector.Collector
 
@@ -45,6 +50,9 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	if strings.TrimSpace(req.RunID) == "" {
 		return out, fmt.Errorf("missing run_id")
 	}
+	if err := runs.ValidateRunID(req.RunID); err != nil {
+		return out, err
+	}
 	if len(req.CmdArgv) == 0 {
 		return out, fmt.Errorf("missing cmd_argv")
 	}
@@ -53,21 +61,53 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		cwd = "/"
 	}
 
+	// Basic DoS guard: limit concurrent sessions.
+	m.mu.Lock()
+	total := len(m.bySessionID)
+	perUID := 0
+	for _, s := range m.bySessionID {
+		if s.uid == cred.UID {
+			perUID++
+		}
+	}
+	m.mu.Unlock()
+	if total >= maxSessionsTotal {
+		return out, fmt.Errorf("too many concurrent sessions (limit=%d)", maxSessionsTotal)
+	}
+	if perUID >= maxSessionsPerUID {
+		return out, fmt.Errorf("too many concurrent sessions for uid %d (limit=%d)", cred.UID, maxSessionsPerUID)
+	}
+
 	homeDir, err := runs.HomeDirForUID(cred.UID)
 	if err != nil {
 		return out, fmt.Errorf("resolve home dir: %w", err)
 	}
 
 	base := m.pickLogiraHome(cred.UID, homeDir, strings.TrimSpace(req.LogiraHome))
-	if err := os.MkdirAll(filepath.Join(base, "runs"), 0o755); err != nil {
-		return out, fmt.Errorf("mkdir logira home: %w", err)
+	if err := requireOwnedPrivateDir(base, cred.UID); err != nil {
+		return out, fmt.Errorf("logira home dir unsafe or not initialized: %w", err)
+	}
+	if err := requireOwnedPrivateDir(filepath.Join(base, "runs"), cred.UID); err != nil {
+		return out, fmt.Errorf("logira runs dir unsafe or not initialized: %w", err)
 	}
 
 	runDir := runs.RunDir(base, req.RunID)
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
+	if _, err := os.Lstat(runDir); err == nil {
+		return out, fmt.Errorf("run dir already exists")
+	} else if !os.IsNotExist(err) {
+		return out, fmt.Errorf("stat run dir: %w", err)
+	}
+	// Keep the run directory root-owned and private while the run is active to
+	// prevent symlink/hardlink races against root file operations.
+	if err := os.Mkdir(runDir, 0o700); err != nil {
 		return out, fmt.Errorf("mkdir run dir: %w", err)
 	}
-	_ = runs.BestEffortChownTree(runDir, cred.UID, cred.GID)
+	cleanupRunDir := true
+	defer func() {
+		if cleanupRunDir {
+			_ = os.RemoveAll(runDir)
+		}
+	}()
 
 	now := time.Now().UTC()
 	startTS := now.UnixNano()
@@ -89,6 +129,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	sessionID := uuid.NewString()
 	cg, err := cgroupv2.CreateDelegated(req.RunID, cred.UID, cred.GID, sessionID)
 	if err != nil {
+		// runDir cleanup deferred
 		return out, err
 	}
 	meta.CgroupPath = cg.Path
@@ -113,7 +154,6 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		_ = cg.Remove()
 		return out, err
 	}
-	_ = runs.BestEffortChownTree(runDir, cred.UID, cred.GID)
 
 	detector := detect.NewEngine(homeDir)
 
@@ -135,6 +175,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		RunDir:     runDir,
 		CgroupID:   cgID,
 	}
+	cleanupRunDir = false
 	return out, nil
 }
 
@@ -170,7 +211,6 @@ func (m *SessionManager) StopRun(ctx context.Context, cred ipc.PeerCred, session
 
 	// Best-effort cleanup.
 	_ = s.cg.Remove()
-	_ = runs.BestEffortChownTree(s.runDir, s.uid, s.gid)
 	_ = exitCode
 	return nil
 }
@@ -266,6 +306,31 @@ func uidOwns(st os.FileInfo, uid int) bool {
 		return false
 	}
 	return int(sys.Uid) == uid
+}
+
+func requireOwnedPrivateDir(p string, uid int) error {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return fmt.Errorf("empty path")
+	}
+	st, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	if st.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s is a symlink", p)
+	}
+	if !st.IsDir() {
+		return fmt.Errorf("%s is not a directory", p)
+	}
+	if !uidOwns(st, uid) {
+		return fmt.Errorf("%s is not owned by uid %d", p, uid)
+	}
+	// Disallow group/other write to avoid other-user races in shared locations.
+	if st.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("%s is writable by group/others", p)
+	}
+	return nil
 }
 
 func procUID(pid int) (int, error) {

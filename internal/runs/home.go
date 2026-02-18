@@ -130,7 +130,12 @@ func homeCandidates(primary string) ([]string, error) {
 }
 
 func ensureHomeDir(home string) (string, error) {
-	if err := os.MkdirAll(filepath.Join(home, "runs"), 0o755); err != nil {
+	// Home contains audit data (command lines, file paths, network destinations).
+	// Default to private permissions.
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", home, err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "runs"), 0o700); err != nil {
 		return "", fmt.Errorf("mkdir %s: %w", home, err)
 	}
 	return home, nil
@@ -144,7 +149,7 @@ func sqliteWorks(home string) bool {
 	// for dot-prefixed DB files.
 	p := filepath.Join(home, "sqlite_check.sqlite")
 	_ = os.Remove(p)
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return false
 	}

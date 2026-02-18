@@ -22,6 +22,9 @@ func ResolveRunID(home, sel string) (runID string, runDir string, err error) {
 		}
 		return id, RunDir(home, id), nil
 	}
+	if err := ValidateRunID(sel); err != nil {
+		return "", "", err
+	}
 	dir := RunDir(home, sel)
 	if _, err := os.Stat(dir); err != nil {
 		return "", "", fmt.Errorf("run %q not found: %w", sel, err)
@@ -38,7 +41,9 @@ func LastRunID(home string) (string, error) {
 	ids := make([]string, 0, len(ents))
 	for _, e := range ents {
 		if e.IsDir() {
-			ids = append(ids, e.Name())
+			if ValidateRunID(e.Name()) == nil {
+				ids = append(ids, e.Name())
+			}
 		}
 	}
 	if len(ids) == 0 {
