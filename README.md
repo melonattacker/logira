@@ -23,7 +23,24 @@ logira includes an opinionated, observe-only default ruleset aimed at auditing A
 - Suspicious exec patterns: `curl|sh`, `wget|sh`, tunneling/reverse shell tools and flags, base64 decode with shell hints.
 - Network egress: suspicious destination ports and cloud metadata endpoint access.
 
-## Quick Start
+## Installation
+### from script (recommended)
+
+Option1. Install via the convenicent script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/melonattacker/logira/main/install.sh | sudo bash
+```
+
+Option2. Manual install from a release tarball:
+
+```bash
+tar -xzf logira_vX.Y.Z_linux-<arch>.tar.gz
+cd logira_vX.Y.Z_linux-<arch>
+sudo ./install-local.sh
+```
+
+### from source
 
 Build:
 
@@ -77,6 +94,7 @@ sudo systemctl disable --now logirad
 ```
 </details>
 
+## Usage
 
 Run an agent under audit as your normal user (events are auto-saved):
 
@@ -150,5 +168,16 @@ Each run is stored at:
 ## Notes
 
 - Linux kernel 5.8+ is required.
+- systemd is required (the root daemon `logirad` is expected to run under systemd for normal installs).
+- cgroup v2 is required (check with `logira status`).
 - Tracing requires the root daemon `logirad` to be running; `logira run` itself does not require sudo.
 - If BPF object files are missing, set `LOGIRA_EXEC_BPF_OBJ` / `LOGIRA_NET_BPF_OBJ` / `LOGIRA_FILE_BPF_OBJ`.
+
+## Installed Paths (defaults)
+
+The installer places:
+
+- binaries: `/usr/local/bin/logira`, `/usr/local/bin/logirad`
+- BPF objects: `/usr/local/lib/logira/bpf/`
+- systemd unit: `/etc/systemd/system/logirad.service`
+- environment file: `/etc/logira/logirad.env` (sets `LOGIRA_EXEC_BPF_OBJ`, `LOGIRA_NET_BPF_OBJ`, `LOGIRA_FILE_BPF_OBJ`)

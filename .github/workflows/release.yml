@@ -1,0 +1,174 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch_slug: linux-amd64
+            goarch: amd64
+          - arch_slug: linux-arm64
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      
+      - name: Validate tag format
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+            echo "Invalid tag: $TAG"
+            exit 2
+          }
+
+      - name: Verify signed tag (SSH)
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f .github/release-signing-publickey.asc ]]; then
+            echo "Missing .github/release-signing-publickey.asc"
+            echo "Add the SSH public key(s) used to sign release tags to that path."
+            exit 2
+          fi
+
+          # Git can verify SSH-signed tags when configured with an allowed signers file.
+          # The allowed signers format is:
+          #   <principal-pattern> <keytype> <base64-key>
+          # We accept either:
+          #   - raw public keys (e.g. "ssh-ed25519 AAAA...") -> principal pattern "*"
+          #   - full allowed signers lines (e.g. "* ssh-ed25519 AAAA...")
+          awk '
+            /^[[:space:]]*($|#)/ { next }
+            $1 ~ /^ssh-|^ecdsa-/ { print "* " $0; next }
+            { print $0 }
+          ' .github/release-signing-publickey.asc > /tmp/logira.allowed_signers
+
+          git config gpg.format ssh
+          git config gpg.ssh.allowedSignersFile /tmp/logira.allowed_signers
+          git tag -v "$TAG"
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libelf-dev linux-libc-dev
+
+      - name: Generate BPF objects
+        run: make generate
+
+      - name: Build binaries
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: make build
+
+      - name: Package
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          ARCH: ${{ matrix.arch_slug }}
+        run: |
+          set -euo pipefail
+          pkg_dir="logira_${TAG}_${ARCH}"
+          rm -rf "$pkg_dir"
+          mkdir -p "$pkg_dir/bin" "$pkg_dir/bpf/exec" "$pkg_dir/bpf/net" "$pkg_dir/bpf/file" "$pkg_dir/systemd"
+
+          cp -f ./logira "$pkg_dir/bin/logira"
+          cp -f ./logirad "$pkg_dir/bin/logirad"
+
+          cp -f collector/linux/exec/trace_bpfel.o "$pkg_dir/bpf/exec/trace_bpfel.o"
+          cp -f collector/linux/net/trace_bpfel.o "$pkg_dir/bpf/net/trace_bpfel.o"
+          cp -f collector/linux/filetrace/trace_bpfel.o "$pkg_dir/bpf/file/trace_bpfel.o"
+
+          cp -f packaging/systemd/logirad.service "$pkg_dir/systemd/logirad.service"
+          cp -f packaging/install-local.sh "$pkg_dir/install-local.sh"
+          chmod +x "$pkg_dir/install-local.sh"
+          cp -f README.md "$pkg_dir/README.md"
+
+          tarball="logira_${TAG}_${ARCH}.tar.gz"
+          tar -czf "$tarball" "$pkg_dir"
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: tarballs-${{ matrix.arch_slug }}
+          path: |
+            logira_*.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+    needs: [build]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: tarballs-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          sha256sum *.tar.gz > SHA256SUMS.txt
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Cosign keyless sign (blob)
+        run: |
+          set -euo pipefail
+          for f in *.tar.gz SHA256SUMS.txt; do
+            cosign sign-blob --yes --output-signature "${f}.sig" --output-bundle "${f}.bundle" "$f"
+          done
+
+      - name: Generate build provenance (GitHub OIDC)
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            *.tar.gz
+            SHA256SUMS.txt
+            *.sig
+            *.bundle
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, '-rc.') || contains(env.TAG, '-beta') || contains(env.TAG, '-alpha') }}
+          generate_release_notes: true
+          files: |
+            *.tar.gz
+            SHA256SUMS.txt
+            *.sig
+            *.bundle
