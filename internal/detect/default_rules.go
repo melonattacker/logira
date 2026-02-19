@@ -11,17 +11,79 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed rules/default_rules.yaml
-var defaultRulesFS embed.FS
+const (
+	DefaultRulesProfile  = "default"
+	SecurityRulesProfile = "security"
+	StrictRulesProfile   = "strict"
+)
+
+var supportedProfiles = []string{
+	DefaultRulesProfile,
+	SecurityRulesProfile,
+	StrictRulesProfile,
+}
+
+var builtinRuleFiles = map[string]string{
+	DefaultRulesProfile:  "rules/default_rules.yaml",
+	SecurityRulesProfile: "rules/security_rules.yaml",
+}
+
+//go:embed rules/*.yaml
+var rulesFS embed.FS
 
 type ruleFile struct {
 	Rules []Rule `yaml:"rules"`
 }
 
 func LoadDefaultRules() ([]Rule, error) {
-	b, err := defaultRulesFS.ReadFile("rules/default_rules.yaml")
+	return LoadProfileRules(DefaultRulesProfile)
+}
+
+func NormalizeRulesProfile(profile string) string {
+	p := strings.ToLower(strings.TrimSpace(profile))
+	if p == "" {
+		return DefaultRulesProfile
+	}
+	return p
+}
+
+func LoadProfileRules(profile string) ([]Rule, error) {
+	profile = NormalizeRulesProfile(profile)
+
+	switch profile {
+	case DefaultRulesProfile, SecurityRulesProfile:
+		return loadBuiltinProfile(profile)
+	case StrictRulesProfile:
+		// strict is a profile union, so defaults remain centralized.
+		out := make([]Rule, 0, 128)
+		seen := map[string]struct{}{}
+		for _, name := range []string{DefaultRulesProfile, SecurityRulesProfile} {
+			rs, err := loadBuiltinProfile(name)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range rs {
+				if _, ok := seen[r.ID]; ok {
+					continue
+				}
+				seen[r.ID] = struct{}{}
+				out = append(out, r)
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unknown rules profile %q (supported: %s)", profile, strings.Join(supportedProfiles, ", "))
+	}
+}
+
+func loadBuiltinProfile(profile string) ([]Rule, error) {
+	path, ok := builtinRuleFiles[profile]
+	if !ok {
+		return nil, fmt.Errorf("unknown builtin rules profile %q", profile)
+	}
+	b, err := rulesFS.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read rules profile %q (%s): %w", profile, path, err)
 	}
 	return LoadRulesYAML(b)
 }
@@ -47,6 +109,12 @@ func LoadRulesYAML(b []byte) ([]Rule, error) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+func SupportedProfiles() []string {
+	out := make([]string, len(supportedProfiles))
+	copy(out, supportedProfiles)
+	return out
 }
 
 func validateAndCompileRule(r *Rule) error {

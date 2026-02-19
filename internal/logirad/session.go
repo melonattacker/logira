@@ -148,10 +148,19 @@ func (s *session) handleObservedEvent(ev collector.Event) error {
 		return err
 	}
 
-	for _, det := range s.detector.Evaluate(typ, ev.Detail) {
-		_, _ = s.store.AppendDetection(storage.NowUnixNanos(), det, seq)
-	}
+	dets := s.evaluateDetections(typ, ev.Detail)
+	s.emitDetections(seq, dets)
 	return nil
+}
+
+func (s *session) evaluateDetections(typ storage.EventType, detail json.RawMessage) []storage.Detection {
+	return s.detector.Evaluate(typ, detail)
+}
+
+func (s *session) emitDetections(observedSeq int64, detections []storage.Detection) {
+	for _, det := range detections {
+		_, _ = s.store.AppendDetection(storage.NowUnixNanos(), det, observedSeq)
+	}
 }
 
 func (s *session) normalizeFileDetail(ev collector.Event) (model.FileDetail, bool) {

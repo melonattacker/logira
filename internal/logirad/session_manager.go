@@ -31,16 +31,19 @@ const (
 type SessionManager struct {
 	collector collector.Collector
 
+	defaultRulesProfile string
+
 	mu          sync.Mutex
 	bySessionID map[string]*session
 	byCgroupID  map[uint64]*session
 }
 
-func NewSessionManager(col collector.Collector) *SessionManager {
+func NewSessionManager(col collector.Collector, defaultRulesProfile string) *SessionManager {
 	return &SessionManager{
-		collector:   col,
-		bySessionID: make(map[string]*session),
-		byCgroupID:  make(map[uint64]*session),
+		collector:           col,
+		defaultRulesProfile: detect.NormalizeRulesProfile(defaultRulesProfile),
+		bySessionID:         make(map[string]*session),
+		byCgroupID:          make(map[uint64]*session),
 	}
 }
 
@@ -141,6 +144,16 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		return out, err
 	}
 
+	rulesProfile := strings.TrimSpace(req.RulesProfile)
+	if rulesProfile == "" {
+		rulesProfile = m.defaultRulesProfile
+	}
+	detector, err := detect.NewEngine(homeDir, rulesProfile)
+	if err != nil {
+		_ = cg.Remove()
+		return out, fmt.Errorf("load rules profile %q: %w", rulesProfile, err)
+	}
+
 	metaJSONBytes, _ := json.Marshal(meta)
 	store, err := storage.Open(storage.OpenParams{
 		RunID:    req.RunID,
@@ -154,8 +167,6 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		_ = cg.Remove()
 		return out, err
 	}
-
-	detector := detect.NewEngine(homeDir)
 
 	s := newSession(sessionID, cred.UID, cred.GID, homeDir, req.EnableExec, req.EnableFile, req.EnableNet, base, runDir, meta, store, detector, cg, cgID)
 	m.mu.Lock()

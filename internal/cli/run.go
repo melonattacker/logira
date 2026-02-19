@@ -47,6 +47,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	var hashMaxBytes int64
 	var waitChildren bool
 	var waitChildrenTimeout time.Duration
+	var rulesProfile string
 
 	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
@@ -59,6 +60,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	fs.Int64Var(&hashMaxBytes, "hash-max-bytes", 10*1024*1024, "max bytes hashed per file (legacy; may be ignored)")
 	fs.BoolVar(&waitChildren, "wait-children", true, "wait until cgroup process tree exits")
 	fs.DurationVar(&waitChildrenTimeout, "wait-children-timeout", 5*time.Second, "max wait for cgroup to drain")
+	fs.StringVar(&rulesProfile, "rules-profile", "", "rules profile for this run (default|security|strict); empty uses daemon default")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
@@ -118,6 +120,7 @@ func RunCommand(ctx context.Context, args []string) error {
 		ArgvMax:      argvMax,
 		ArgvMaxBytes: argvMaxBytes,
 		HashMaxBytes: hashMaxBytes,
+		RulesProfile: strings.TrimSpace(rulesProfile),
 	}
 
 	startResp, err := client.StartRun(ctx, startReq)
@@ -197,6 +200,7 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
 	fmt.Fprintf(w, "  %s run --watch . --watch /etc -- bash -lc 'echo hi > x.txt; cat /etc/hosts >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  %s run --rules-profile security -- bash -lc 'curl -s https://example.com >/dev/null'\n", prog)
 	fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
 	fmt.Fprintln(w, "Flags:")

@@ -14,22 +14,26 @@ import (
 type Engine struct {
 	home string
 
+	profile string
+
 	rulesByType map[storage.EventType][]Rule
 }
 
-func NewEngine(homeDir string) *Engine {
+func NewEngine(homeDir string, profile string) (*Engine, error) {
+	profile = NormalizeRulesProfile(profile)
 	e := &Engine{
 		home:        strings.TrimSpace(homeDir),
+		profile:     profile,
 		rulesByType: map[storage.EventType][]Rule{},
 	}
-	rules, err := LoadDefaultRules()
+	rules, err := LoadProfileRules(profile)
 	if err != nil {
-		return e
+		return nil, err
 	}
 	for _, r := range rules {
 		e.rulesByType[r.Type] = append(e.rulesByType[r.Type], r)
 	}
-	return e
+	return e, nil
 }
 
 // Evaluate returns zero or more detections for an observed event.

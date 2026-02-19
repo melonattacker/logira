@@ -130,6 +130,7 @@ main() {
 LOGIRA_EXEC_BPF_OBJ=${prefix_lib}/bpf/exec/trace_bpfel.o
 LOGIRA_NET_BPF_OBJ=${prefix_lib}/bpf/net/trace_bpfel.o
 LOGIRA_FILE_BPF_OBJ=${prefix_lib}/bpf/file/trace_bpfel.o
+LOGIRA_RULES_PROFILE=default
 EOF
   chmod 0644 "$env_file"
 

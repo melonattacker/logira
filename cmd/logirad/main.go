@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/melonattacker/logira/collector"
+	"github.com/melonattacker/logira/internal/detect"
 	"github.com/melonattacker/logira/internal/ipc"
 	"github.com/melonattacker/logira/internal/logirad"
 )
@@ -24,11 +26,19 @@ func realMain() int {
 	var enableExec bool
 	var enableFile bool
 	var enableNet bool
+	var rulesProfile string
 	flag.StringVar(&sock, "sock", ipc.SockPath(), "unix socket path (default: /run/logira.sock; override: LOGIRA_SOCK)")
 	flag.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	flag.BoolVar(&enableFile, "file", true, "enable file tracing")
 	flag.BoolVar(&enableNet, "net", true, "enable network tracing")
+	flag.StringVar(&rulesProfile, "rules-profile", defaultRulesProfile(), "default rules profile (default|security|strict)")
 	flag.Parse()
+
+	rulesProfile = detect.NormalizeRulesProfile(rulesProfile)
+	if _, err := detect.LoadProfileRules(rulesProfile); err != nil {
+		fmt.Fprintf(os.Stderr, "rules profile: %v\n", err)
+		return 1
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -53,17 +63,29 @@ func realMain() int {
 	}
 	defer col.Stop(context.Background())
 
-	mgr := logirad.NewSessionManager(col)
+	mgr := logirad.NewSessionManager(col, rulesProfile)
 	go func() {
 		for ev := range events {
 			mgr.RouteEvent(ev)
 		}
 	}()
 
-	srv := logirad.NewServer(sock, mgr, logirad.ServerConfig{EnableExec: enableExec, EnableFile: enableFile, EnableNet: enableNet})
+	srv := logirad.NewServer(sock, mgr, logirad.ServerConfig{
+		EnableExec:   enableExec,
+		EnableFile:   enableFile,
+		EnableNet:    enableNet,
+		RulesProfile: rulesProfile,
+	})
 	if err := srv.ListenAndServe(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "server: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+func defaultRulesProfile() string {
+	if v := strings.TrimSpace(os.Getenv("LOGIRA_RULES_PROFILE")); v != "" {
+		return v
+	}
+	return detect.DefaultRulesProfile
 }
