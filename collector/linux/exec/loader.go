@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -80,19 +81,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 
 	objPath := getenvAny("LOGIRA_EXEC_BPF_OBJ", "logira_EXEC_BPF_OBJ")
 	if objPath == "" {
-		tried := []string{
-			filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
-			filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
-		}
-		if exe, err := os.Executable(); err == nil {
-			exeDir := filepath.Dir(exe)
-			for _, p := range []string{
-				filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
-				filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
-			} {
-				tried = append(tried, filepath.Join(exeDir, p))
-			}
-		}
+		tried := defaultObjCandidates()
 		objPath = firstExistingPath(tried...)
 		if objPath == "" {
 			return nil, fmt.Errorf(
@@ -296,4 +285,53 @@ func getenvAny(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func defaultObjCandidates() []string {
+	rel := []string{
+		filepath.Join("collector", "linux", "exec", "trace_bpfel.o"),
+		filepath.Join("collector", "linux", "exec", "trace.bpf.o"),
+		filepath.Join("exec", "trace_bpfel.o"),
+		filepath.Join("exec", "trace.bpf.o"),
+		"trace_bpfel.o",
+		"trace.bpf.o",
+	}
+
+	out := make([]string, 0, len(rel)*3+2)
+	out = append(out, rel...)
+
+	// Package-local absolute path works in `go test` where CWD can be package-scoped.
+	if _, file, _, ok := runtime.Caller(0); ok {
+		dir := filepath.Dir(file)
+		out = append(out,
+			filepath.Join(dir, "trace_bpfel.o"),
+			filepath.Join(dir, "trace.bpf.o"),
+		)
+	}
+
+	// Executable-relative paths help systemd/install layouts.
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		for _, p := range rel {
+			out = append(out, filepath.Join(exeDir, p))
+		}
+	}
+
+	return uniquePaths(out)
+}
+
+func uniquePaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }

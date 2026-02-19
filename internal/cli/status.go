@@ -26,7 +26,6 @@ type statusJSON struct {
 		PID          int    `json:"pid"`
 		UID          int    `json:"uid"`
 		GID          int    `json:"gid"`
-		RulesProfile string `json:"rules_profile,omitempty"`
 		Sock         string `json:"sock"`
 		SocketAccess string `json:"socket_access"`
 		SocketError  string `json:"socket_error,omitempty"`
@@ -103,7 +102,6 @@ func StatusCommand(ctx context.Context, args []string) error {
 	out.Daemon.PID = st.PID
 	out.Daemon.UID = st.UID
 	out.Daemon.GID = st.GID
-	out.Daemon.RulesProfile = st.RulesProfile
 	out.BPFProbes.Exec = st.EnableExec
 	out.BPFProbes.File = st.EnableFile
 	out.BPFProbes.Net = st.EnableNet
@@ -196,9 +194,6 @@ func writeStatus(s statusJSON, asJSON bool) error {
 	}
 	if s.Daemon.StatusOK {
 		fmt.Fprintf(os.Stdout, "BPF probes:    exec %s  file %s  net %s\n", probeWord(s.BPFProbes.Exec), probeWord(s.BPFProbes.File), probeWord(s.BPFProbes.Net))
-		if strings.TrimSpace(s.Daemon.RulesProfile) != "" {
-			fmt.Fprintf(os.Stdout, "Rules profile: %s\n", s.Daemon.RulesProfile)
-		}
 	} else {
 		fmt.Fprintf(os.Stdout, "BPF probes:    exec UNKNOWN  file UNKNOWN  net UNKNOWN\n")
 	}

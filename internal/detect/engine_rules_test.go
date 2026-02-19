@@ -11,18 +11,18 @@ import (
 	"github.com/melonattacker/logira/internal/storage"
 )
 
-func mustEngine(t *testing.T, home string, profile string) *Engine {
+func mustEngine(t *testing.T, home string) *Engine {
 	t.Helper()
-	e, err := NewEngine(home, profile)
+	e, err := NewEngine(home)
 	if err != nil {
-		t.Fatalf("NewEngine(%q,%q): %v", home, profile, err)
+		t.Fatalf("NewEngine(%q): %v", home, err)
 	}
 	return e
 }
 
 func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 	home := "/home/u"
-	e := mustEngine(t, home, DefaultRulesProfile)
+	e := mustEngine(t, home)
 
 	fileDetail, _ := json.Marshal(model.FileDetail{Op: "modify", Path: filepath.Join(home, ".ssh", "id_rsa")})
 	ds := e.Evaluate(storage.TypeFile, fileDetail)
@@ -50,7 +50,7 @@ func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 }
 
 func TestEngine_Evaluate_R2(t *testing.T) {
-	e := mustEngine(t, "/home/u", DefaultRulesProfile)
+	e := mustEngine(t, "/home/u")
 
 	dir, err := os.MkdirTemp("/tmp", "logira-detect-test-")
 	if err != nil {
@@ -85,7 +85,7 @@ func TestEngine_Evaluate_R2(t *testing.T) {
 
 func TestEngine_Evaluate_DSL_FilePathInAndPrefixAny(t *testing.T) {
 	home := "/home/u"
-	e := mustEngine(t, home, DefaultRulesProfile)
+	e := mustEngine(t, home)
 
 	// F132 uses path_in list for shell startup files.
 	p := filepath.Join(home, ".bashrc")
@@ -104,7 +104,7 @@ func TestEngine_Evaluate_DSL_FilePathInAndPrefixAny(t *testing.T) {
 }
 
 func TestEngine_Evaluate_DSL_NetPortInAndIPIn(t *testing.T) {
-	e := mustEngine(t, "/home/u", DefaultRulesProfile)
+	e := mustEngine(t, "/home/u")
 
 	// N010 uses dst_port_in list.
 	netDetail, _ := json.Marshal(model.NetDetail{Op: "connect", DstIP: "5.6.7.8", DstPort: 4444})
@@ -136,7 +136,7 @@ func TestEngine_Evaluate_DSL_NetPortInAndIPIn(t *testing.T) {
 }
 
 func TestEngine_Evaluate_DSL_ExecContainsAny(t *testing.T) {
-	e := mustEngine(t, "/home/u", DefaultRulesProfile)
+	e := mustEngine(t, "/home/u")
 
 	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/usr/bin/socat", Argv: []string{"socat", "TCP:1.2.3.4:4444"}})
 	ds := e.Evaluate(storage.TypeExec, execDetail)
@@ -153,7 +153,7 @@ func TestEngine_Evaluate_DSL_ExecContainsAny(t *testing.T) {
 }
 
 func TestEngine_Evaluate_AgentSafety_Default(t *testing.T) {
-	e := mustEngine(t, "/home/u", DefaultRulesProfile)
+	e := mustEngine(t, "/home/u")
 
 	tests := []struct {
 		name     string
@@ -191,17 +191,5 @@ func TestEngine_Evaluate_AgentSafety_Default(t *testing.T) {
 				t.Fatalf("expected %s, got %+v", tc.wantRule, ds)
 			}
 		})
-	}
-}
-
-func TestEngine_Evaluate_AgentSafety_SecurityExcluded(t *testing.T) {
-	e := mustEngine(t, "/home/u", SecurityRulesProfile)
-
-	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/bin/rm", Argv: []string{"rm", "-rf", "/tmp/x"}})
-	ds := e.Evaluate(storage.TypeExec, execDetail)
-	for _, d := range ds {
-		if d.RuleID == "E100" {
-			t.Fatalf("security profile should not include E100: %+v", ds)
-		}
 	}
 }

@@ -14,19 +14,15 @@ import (
 type Engine struct {
 	home string
 
-	profile string
-
 	rulesByType map[storage.EventType][]Rule
 }
 
-func NewEngine(homeDir string, profile string) (*Engine, error) {
-	profile = NormalizeRulesProfile(profile)
+func NewEngine(homeDir string) (*Engine, error) {
 	e := &Engine{
 		home:        strings.TrimSpace(homeDir),
-		profile:     profile,
 		rulesByType: map[storage.EventType][]Rule{},
 	}
-	rules, err := LoadProfileRules(profile)
+	rules, err := loadActiveRules()
 	if err != nil {
 		return nil, err
 	}

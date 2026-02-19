@@ -43,7 +43,6 @@ type StartRunRequest struct {
 	ArgvMax      int      `json:"argv_max,omitempty"`
 	ArgvMaxBytes int      `json:"argv_max_bytes,omitempty"`
 	HashMaxBytes int64    `json:"hash_max_bytes,omitempty"`
-	RulesProfile string   `json:"rules_profile,omitempty"`
 }
 
 type StartRunResponse struct {
@@ -94,8 +93,6 @@ type StatusResponse struct {
 	EnableExec bool `json:"enable_exec"`
 	EnableFile bool `json:"enable_file"`
 	EnableNet  bool `json:"enable_net"`
-
-	RulesProfile string `json:"rules_profile,omitempty"`
 }
 
 func DecodeType(line []byte) (string, error) {

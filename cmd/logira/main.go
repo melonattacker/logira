@@ -144,7 +144,6 @@ func printRootHelp(w io.Writer, prog string) {
 	fmt.Fprintln(w, "  LOGIRA_EXEC_BPF_OBJ   Override exec BPF object path (Linux only)")
 	fmt.Fprintln(w, "  LOGIRA_NET_BPF_OBJ    Override net BPF object path (Linux only)")
 	fmt.Fprintln(w, "  LOGIRA_FILE_BPF_OBJ   Override file BPF object path (Linux only)")
-	fmt.Fprintln(w, "  LOGIRA_RULES_PROFILE  Default rules profile for logirad (default: default)")
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Help:")

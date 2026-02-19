@@ -33,8 +33,6 @@ type ServerConfig struct {
 	EnableExec bool
 	EnableFile bool
 	EnableNet  bool
-
-	RulesProfile string
 }
 
 func NewServer(sockPath string, sessions *SessionManager, cfg ServerConfig) *Server {
@@ -140,14 +138,13 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 	case ipc.MsgTypeStatus:
 		// No request fields beyond type.
 		resp := ipc.StatusResponse{
-			Type:         ipc.MsgTypeStatusOK,
-			PID:          os.Getpid(),
-			UID:          os.Geteuid(),
-			GID:          os.Getegid(),
-			EnableExec:   s.cfg.EnableExec,
-			EnableFile:   s.cfg.EnableFile,
-			EnableNet:    s.cfg.EnableNet,
-			RulesProfile: strings.TrimSpace(s.cfg.RulesProfile),
+			Type:       ipc.MsgTypeStatusOK,
+			PID:        os.Getpid(),
+			UID:        os.Geteuid(),
+			GID:        os.Getegid(),
+			EnableExec: s.cfg.EnableExec,
+			EnableFile: s.cfg.EnableFile,
+			EnableNet:  s.cfg.EnableNet,
 		}
 		_, _ = c.Write(ipc.MustLine(resp))
 	default:

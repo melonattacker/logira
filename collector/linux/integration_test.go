@@ -10,8 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/melonattacker/logira/collector"
-	"github.com/melonattacker/logira/internal/logging"
+	collector "github.com/melonattacker/logira/collector/common"
 )
 
 func TestCollectorIntegrationSmoke(t *testing.T) {
@@ -20,7 +19,6 @@ func TestCollectorIntegrationSmoke(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	logPath := filepath.Join(tmp, "out.jsonl")
 	outFile := filepath.Join(tmp, "x.txt")
 
 	cfg := collector.Config{
@@ -44,20 +42,6 @@ func TestCollectorIntegrationSmoke(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	writer, err := logging.NewJSONLWriter(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer writer.Close()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for ev := range events {
-			_ = writer.WriteEvent(ev)
-		}
-	}()
-
 	cmd := exec.Command("bash", "-lc", "echo hi > \""+outFile+"\"")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -69,17 +53,12 @@ func TestCollectorIntegrationSmoke(t *testing.T) {
 	time.Sleep(750 * time.Millisecond)
 	_ = c.Stop(context.Background())
 	close(events)
-	<-done
 
-	files, err := logging.CollectLogFiles(logPath)
-	if err != nil {
-		t.Fatal(err)
+	count := 0
+	for range events {
+		count++
 	}
-	all, err := logging.ReadEvents(files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(all) == 0 {
+	if count == 0 {
 		t.Fatalf("expected at least one event")
 	}
 }

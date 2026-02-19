@@ -53,7 +53,6 @@ Start the root daemon (required for tracing):
 
 ```bash
 sudo ./logirad
-# or: sudo ./logirad --rules-profile security
 ```
 
 <details>
@@ -78,7 +77,6 @@ sudo tee /etc/logira/logirad.env >/dev/null <<'EOF'
 LOGIRA_EXEC_BPF_OBJ=/absolute/path/to/collector/linux/exec/trace_bpfel.o
 LOGIRA_NET_BPF_OBJ=/absolute/path/to/collector/linux/net/trace_bpfel.o
 LOGIRA_FILE_BPF_OBJ=/absolute/path/to/collector/linux/filetrace/trace_bpfel.o
-LOGIRA_RULES_PROFILE=default
 EOF
 
 # 5) Enable + start
@@ -103,7 +101,6 @@ Run an agent under audit as your normal user (events are auto-saved):
 
 ```bash
 ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'
-./logira run --rules-profile security -- bash -lc 'curl -s https://example.com >/dev/null'
 ```
 
 Run Codex CLI:
@@ -147,10 +144,8 @@ Query events:
 - `logira query [filters...]`: search events in a run
 - `logira explain [last|<run-id>]`: explain detections for a run
 
-Rules profiles:
-- `default`: current built-ins + agent-safety destructive patterns
-- `security`: attack/intrusion-focused built-ins
-- `strict`: union of `default` and `security`
+Rules:
+- built-in default ruleset only (`internal/detect/rules/default_rules.yaml`)
 
 ## Where Is Data Stored?
 

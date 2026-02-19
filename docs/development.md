@@ -46,8 +46,6 @@ go test -tags=integration ./collector/linux -v
   - `LOGIRA_HOME=/path/to/state`
 - logirad socket can be overridden:
   - `LOGIRA_SOCK=/path/to/logira.sock`
-- daemon default rules profile can be overridden:
-  - `LOGIRA_RULES_PROFILE=default|security|strict`
 - If runtime fails to load BPF objects, set explicit paths:
   - `LOGIRA_EXEC_BPF_OBJ=/abs/path/to/trace_bpfel.o`
   - `LOGIRA_NET_BPF_OBJ=/abs/path/to/trace_bpfel.o`

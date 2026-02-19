@@ -11,22 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	DefaultRulesProfile  = "default"
-	SecurityRulesProfile = "security"
-	StrictRulesProfile   = "strict"
-)
-
-var supportedProfiles = []string{
-	DefaultRulesProfile,
-	SecurityRulesProfile,
-	StrictRulesProfile,
-}
-
-var builtinRuleFiles = map[string]string{
-	DefaultRulesProfile:  "rules/default_rules.yaml",
-	SecurityRulesProfile: "rules/security_rules.yaml",
-}
+const builtinDefaultRulesFile = "rules/default_rules.yaml"
 
 //go:embed rules/*.yaml
 var rulesFS embed.FS
@@ -36,54 +21,20 @@ type ruleFile struct {
 }
 
 func LoadDefaultRules() ([]Rule, error) {
-	return LoadProfileRules(DefaultRulesProfile)
+	return loadBuiltinDefaultRules()
 }
 
-func NormalizeRulesProfile(profile string) string {
-	p := strings.ToLower(strings.TrimSpace(profile))
-	if p == "" {
-		return DefaultRulesProfile
-	}
-	return p
+// loadActiveRules is the single boundary for selecting runtime detection rules.
+// It currently loads only the built-in default ruleset and exists so future
+// custom-rules support can swap sources without touching engine wiring.
+func loadActiveRules() ([]Rule, error) {
+	return loadBuiltinDefaultRules()
 }
 
-func LoadProfileRules(profile string) ([]Rule, error) {
-	profile = NormalizeRulesProfile(profile)
-
-	switch profile {
-	case DefaultRulesProfile, SecurityRulesProfile:
-		return loadBuiltinProfile(profile)
-	case StrictRulesProfile:
-		// strict is a profile union, so defaults remain centralized.
-		out := make([]Rule, 0, 128)
-		seen := map[string]struct{}{}
-		for _, name := range []string{DefaultRulesProfile, SecurityRulesProfile} {
-			rs, err := loadBuiltinProfile(name)
-			if err != nil {
-				return nil, err
-			}
-			for _, r := range rs {
-				if _, ok := seen[r.ID]; ok {
-					continue
-				}
-				seen[r.ID] = struct{}{}
-				out = append(out, r)
-			}
-		}
-		return out, nil
-	default:
-		return nil, fmt.Errorf("unknown rules profile %q (supported: %s)", profile, strings.Join(supportedProfiles, ", "))
-	}
-}
-
-func loadBuiltinProfile(profile string) ([]Rule, error) {
-	path, ok := builtinRuleFiles[profile]
-	if !ok {
-		return nil, fmt.Errorf("unknown builtin rules profile %q", profile)
-	}
-	b, err := rulesFS.ReadFile(path)
+func loadBuiltinDefaultRules() ([]Rule, error) {
+	b, err := rulesFS.ReadFile(builtinDefaultRulesFile)
 	if err != nil {
-		return nil, fmt.Errorf("read rules profile %q (%s): %w", profile, path, err)
+		return nil, fmt.Errorf("read builtin rules (%s): %w", builtinDefaultRulesFile, err)
 	}
 	return LoadRulesYAML(b)
 }
@@ -109,12 +60,6 @@ func LoadRulesYAML(b []byte) ([]Rule, error) {
 		out = append(out, r)
 	}
 	return out, nil
-}
-
-func SupportedProfiles() []string {
-	out := make([]string, len(supportedProfiles))
-	copy(out, supportedProfiles)
-	return out
 }
 
 func validateAndCompileRule(r *Rule) error {

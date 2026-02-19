@@ -31,19 +31,16 @@ const (
 type SessionManager struct {
 	collector collector.Collector
 
-	defaultRulesProfile string
-
 	mu          sync.Mutex
 	bySessionID map[string]*session
 	byCgroupID  map[uint64]*session
 }
 
-func NewSessionManager(col collector.Collector, defaultRulesProfile string) *SessionManager {
+func NewSessionManager(col collector.Collector) *SessionManager {
 	return &SessionManager{
-		collector:           col,
-		defaultRulesProfile: detect.NormalizeRulesProfile(defaultRulesProfile),
-		bySessionID:         make(map[string]*session),
-		byCgroupID:          make(map[uint64]*session),
+		collector:   col,
+		bySessionID: make(map[string]*session),
+		byCgroupID:  make(map[uint64]*session),
 	}
 }
 
@@ -144,14 +141,10 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		return out, err
 	}
 
-	rulesProfile := strings.TrimSpace(req.RulesProfile)
-	if rulesProfile == "" {
-		rulesProfile = m.defaultRulesProfile
-	}
-	detector, err := detect.NewEngine(homeDir, rulesProfile)
+	detector, err := detect.NewEngine(homeDir)
 	if err != nil {
 		_ = cg.Remove()
-		return out, fmt.Errorf("load rules profile %q: %w", rulesProfile, err)
+		return out, fmt.Errorf("load rules: %w", err)
 	}
 
 	metaJSONBytes, _ := json.Marshal(meta)

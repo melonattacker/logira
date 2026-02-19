@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -38,21 +39,50 @@ func cString(b []byte) string {
 }
 
 func defaultObjCandidates(name string) []string {
-	// Keep existing relative paths (repo-root execution), but also try relative
-	// to the executable directory for systemd-friendly operation.
 	rel := []string{
 		filepath.Join("collector", "linux", name, "trace_bpfel.o"),
 		filepath.Join("collector", "linux", name, "trace.bpf.o"),
+		filepath.Join(name, "trace_bpfel.o"),
+		filepath.Join(name, "trace.bpf.o"),
+		"trace_bpfel.o",
+		"trace.bpf.o",
 	}
-	exe, err := os.Executable()
-	if err != nil {
-		return rel
-	}
-	exeDir := filepath.Dir(exe)
-	out := make([]string, 0, len(rel)*2)
+
+	out := make([]string, 0, len(rel)*3+2)
 	out = append(out, rel...)
-	for _, p := range rel {
-		out = append(out, filepath.Join(exeDir, p))
+
+	// Package-local absolute path works in `go test` where CWD can be package-scoped.
+	if _, file, _, ok := runtime.Caller(0); ok {
+		dir := filepath.Dir(file)
+		out = append(out,
+			filepath.Join(dir, "trace_bpfel.o"),
+			filepath.Join(dir, "trace.bpf.o"),
+		)
+	}
+
+	// Executable-relative paths help systemd/install layouts.
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		for _, p := range rel {
+			out = append(out, filepath.Join(exeDir, p))
+		}
+	}
+
+	return uniquePaths(out)
+}
+
+func uniquePaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
 	}
 	return out
 }
