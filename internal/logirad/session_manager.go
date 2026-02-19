@@ -26,6 +26,10 @@ import (
 const (
 	maxSessionsTotal  = 128
 	maxSessionsPerUID = 8
+
+	autoStopPollInterval         = 250 * time.Millisecond
+	autoStopEmptyGrace           = 500 * time.Millisecond
+	autoStopNoAttachGraceTimeout = 30 * time.Second
 )
 
 type SessionManager struct {
@@ -171,6 +175,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	m.bySessionID[sessionID] = s
 	m.byCgroupID[cgID] = s
 	m.mu.Unlock()
+	go m.autoStopWhenCgroupDrains(sessionID, cg.Path)
 
 	out = ipc.StartRunResponse{
 		Type:       ipc.MsgTypeStartRunOK,
@@ -189,34 +194,109 @@ func (m *SessionManager) StopRun(ctx context.Context, cred ipc.PeerCred, session
 		return fmt.Errorf("missing session_id")
 	}
 
-	m.mu.Lock()
-	s, ok := m.bySessionID[sessionID]
-	m.mu.Unlock()
-	if !ok {
-		return fmt.Errorf("unknown session_id")
-	}
-	if s.uid != cred.UID {
-		return fmt.Errorf("permission denied")
+	s, err := m.takeSessionForStop(sessionID, cred.UID, true)
+	if err != nil {
+		return err
 	}
 
-	endTS := storage.NowUnixNanos()
+	m.finalizeSession(s, storage.NowUnixNanos())
+	_ = exitCode
+	return nil
+}
+
+func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUID bool) (*session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	s, ok := m.bySessionID[sessionID]
+	if !ok {
+		return nil, fmt.Errorf("unknown session_id")
+	}
+	if requireUID && s.uid != uid {
+		return nil, fmt.Errorf("permission denied")
+	}
+
+	delete(m.bySessionID, sessionID)
+	delete(m.byCgroupID, s.cgroupID)
+	return s, nil
+}
+
+func (m *SessionManager) finalizeSession(s *session, endTS int64) {
 	meta := s.meta
 	meta.EndTS = endTS
 	meta.SuspiciousCount = s.store.SuspiciousCount()
 	metaJSONBytes, _ := json.Marshal(meta)
 	_ = runs.WriteMeta(s.runDir, meta)
 
-	m.mu.Lock()
-	delete(m.bySessionID, sessionID)
-	delete(m.byCgroupID, s.cgroupID)
-	m.mu.Unlock()
-
 	s.closeWithEnd(endTS, metaJSONBytes)
-
 	// Best-effort cleanup.
 	_ = s.cg.Remove()
-	_ = exitCode
-	return nil
+}
+
+func (m *SessionManager) hasSession(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.bySessionID[sessionID]
+	return ok
+}
+
+func cgroupHasProcs(cgroupPath string) (bool, error) {
+	p := filepath.Join(strings.TrimSpace(cgroupPath), "cgroup.procs")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(b)) != "", nil
+}
+
+func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath string) {
+	t := time.NewTicker(autoStopPollInterval)
+	defer t.Stop()
+
+	start := time.Now()
+	seenProcesses := false
+	emptySince := time.Time{}
+
+	for range t.C {
+		if !m.hasSession(sessionID) {
+			return
+		}
+
+		hasProcs, err := cgroupHasProcs(cgroupPath)
+		if err != nil {
+			continue
+		}
+		if hasProcs {
+			seenProcesses = true
+			emptySince = time.Time{}
+			continue
+		}
+
+		// If no process ever attached to this run, don't leak a root-owned run dir forever.
+		if !seenProcesses {
+			if time.Since(start) < autoStopNoAttachGraceTimeout {
+				continue
+			}
+			s, err := m.takeSessionForStop(sessionID, 0, false)
+			if err == nil {
+				m.finalizeSession(s, storage.NowUnixNanos())
+			}
+			return
+		}
+
+		if emptySince.IsZero() {
+			emptySince = time.Now()
+			continue
+		}
+		if time.Since(emptySince) < autoStopEmptyGrace {
+			continue
+		}
+		s, err := m.takeSessionForStop(sessionID, 0, false)
+		if err == nil {
+			m.finalizeSession(s, storage.NowUnixNanos())
+		}
+		return
+	}
 }
 
 func (m *SessionManager) AttachPID(ctx context.Context, cred ipc.PeerCred, sessionID string, pid int) error {

@@ -159,7 +159,7 @@ func RunCommand(ctx context.Context, args []string) error {
 		cancel()
 	}
 
-	_ = client.StopRun(context.Background(), startResp.SessionID, exitCode)
+	stopErr := stopRunWithRetry(client, startResp.SessionID, exitCode)
 
 	// Best-effort: read meta for suspicious_count.
 	sus := 0
@@ -176,10 +176,61 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "run_id=%s dir=%s suspicious=%d\n", runID, startResp.RunDir, sus)
 
+	if stopErr != nil {
+		if waitErr != nil {
+			return fmt.Errorf("%w (also failed to finalize run: %v)", waitErr, stopErr)
+		}
+		return fmt.Errorf("finalize run: %w", stopErr)
+	}
+
 	if waitErr != nil {
 		return waitErr
 	}
 	return nil
+}
+
+func stopRunWithRetry(client *ipc.Client, sessionID string, exitCode int) error {
+	tryStop := func(c *ipc.Client) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := c.StopRun(ctx, sessionID, exitCode)
+		if err == nil || isUnknownSessionErr(err) {
+			return nil
+		}
+		return err
+	}
+
+	if err := tryStop(client); err == nil {
+		return nil
+	}
+
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		time.Sleep(time.Duration(i+1) * 200 * time.Millisecond)
+
+		c, err := ipc.Dial(context.Background())
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		err = tryStop(c)
+		_ = c.Close()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("unknown error")
+	}
+	return lastErr
+}
+
+func isUnknownSessionErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "unknown session_id")
 }
 
 func runUsage(w io.Writer, fs *flag.FlagSet) {
