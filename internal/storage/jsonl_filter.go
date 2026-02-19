@@ -12,6 +12,21 @@ func Filter(events []Event, opts QueryOptions) []Event {
 	path := strings.TrimSpace(opts.Path)
 	dstIP := strings.TrimSpace(opts.DstIP)
 	sev := strings.TrimSpace(opts.Severity)
+	relatedSet := map[int64]struct{}{}
+	if opts.RelatedToDetections {
+		for _, ev := range events {
+			if ev.RunID != opts.RunID || ev.Type != TypeDetection {
+				continue
+			}
+			var d Detection
+			if err := json.Unmarshal(ev.DataJSON, &d); err != nil {
+				continue
+			}
+			if d.RelatedEventSeq > 0 {
+				relatedSet[d.RelatedEventSeq] = struct{}{}
+			}
+		}
+	}
 
 	out := make([]Event, 0, len(events))
 	for _, ev := range events {
@@ -21,8 +36,19 @@ func Filter(events []Event, opts QueryOptions) []Event {
 		if opts.SinceTS > 0 && ev.TS < opts.SinceTS {
 			continue
 		}
+		if opts.UntilTS > 0 && ev.TS > opts.UntilTS {
+			continue
+		}
 		if opts.Type != "" && ev.Type != opts.Type {
 			continue
+		}
+		if opts.RelatedToDetections {
+			if ev.Type == TypeDetection {
+				continue
+			}
+			if _, ok := relatedSet[ev.Seq]; !ok {
+				continue
+			}
 		}
 		if contains != "" {
 			s := strings.ToLower(ev.Summary + " " + string(ev.DataJSON))

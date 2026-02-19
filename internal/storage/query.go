@@ -11,14 +11,16 @@ import (
 type QueryOptions struct {
 	RunID string
 
-	Type     EventType // optional; if detection, only detections
-	SinceTS  int64
-	Contains string
-	Path     string
-	DstIP    string
-	DstPort  int
-	Severity string
-	Limit    int
+	Type                EventType // optional; if detection, only detections
+	SinceTS             int64
+	UntilTS             int64
+	Contains            string
+	Path                string
+	DstIP               string
+	DstPort             int
+	Severity            string
+	RelatedToDetections bool
+	Limit               int
 }
 
 func (s *SQLite) Query(opts QueryOptions) ([]Event, error) {
@@ -40,13 +42,24 @@ func (s *SQLite) Query(opts QueryOptions) ([]Event, error) {
 		}
 		return evs, nil
 	case TypeExec, TypeFile, TypeNet:
+		if opts.RelatedToDetections {
+			return s.queryObservedRelatedToDetections(opts, limit)
+		}
 		evs, err := s.queryObserved(opts, limit)
 		if err != nil {
 			return nil, err
 		}
 		return evs, nil
 	default:
-		evs, err := s.queryObserved(opts, limit)
+		var (
+			evs []Event
+			err error
+		)
+		if opts.RelatedToDetections {
+			evs, err = s.queryObservedRelatedToDetections(opts, limit)
+		} else {
+			evs, err = s.queryObserved(opts, limit)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -76,6 +89,10 @@ func (s *SQLite) queryObserved(opts QueryOptions, limit int) ([]Event, error) {
 	if opts.SinceTS > 0 {
 		where = append(where, `ts>=?`)
 		args = append(args, opts.SinceTS)
+	}
+	if opts.UntilTS > 0 {
+		where = append(where, `ts<=?`)
+		args = append(args, opts.UntilTS)
 	}
 	if opts.Type != "" {
 		where = append(where, `type=?`)
@@ -140,6 +157,95 @@ func (s *SQLite) queryObserved(opts QueryOptions, limit int) ([]Event, error) {
 	return out, nil
 }
 
+func (s *SQLite) queryObservedRelatedToDetections(opts QueryOptions, limit int) ([]Event, error) {
+	where := []string{
+		`run_id=?`,
+		`seq IN (SELECT related_seq FROM detections WHERE run_id=? AND related_seq IS NOT NULL)`,
+	}
+	args := []any{opts.RunID, opts.RunID}
+
+	if opts.SinceTS > 0 {
+		where = append(where, `ts>=?`)
+		args = append(args, opts.SinceTS)
+	}
+	if opts.UntilTS > 0 {
+		where = append(where, `ts<=?`)
+		args = append(args, opts.UntilTS)
+	}
+	if opts.Type != "" {
+		where = append(where, `type=?`)
+		args = append(args, string(opts.Type))
+	}
+	if opts.Contains != "" {
+		where = append(where, `(summary LIKE ? OR data_json LIKE ?)`)
+		like := "%" + opts.Contains + "%"
+		args = append(args, like, like)
+	}
+	if opts.Path != "" {
+		where = append(where, `path LIKE ?`)
+		args = append(args, "%"+opts.Path+"%")
+	}
+	if opts.DstIP != "" {
+		where = append(where, `dst_ip=?`)
+		args = append(args, opts.DstIP)
+	}
+	if opts.DstPort > 0 {
+		where = append(where, `dst_port=?`)
+		args = append(args, opts.DstPort)
+	}
+
+	q := fmt.Sprintf(
+		`SELECT run_id, seq, ts, type, pid, ppid, uid, summary, data_json FROM events WHERE %s ORDER BY ts, seq LIMIT ?`,
+		strings.Join(where, " AND "),
+	)
+	args = append(args, limit)
+
+	rows, err := s.DB.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Event, 0, 1024)
+	for rows.Next() {
+		var runID string
+		var seq, ts int64
+		var typ string
+		var pid, ppid, uid sql.NullInt64
+		var summary string
+		var data string
+		if err := rows.Scan(&runID, &seq, &ts, &typ, &pid, &ppid, &uid, &summary, &data); err != nil {
+			return nil, err
+		}
+		out = append(out, Event{
+			RunID:    runID,
+			Seq:      seq,
+			TS:       ts,
+			Type:     EventType(typ),
+			PID:      int(pid.Int64),
+			PPID:     int(ppid.Int64),
+			UID:      int(uid.Int64),
+			Summary:  summary,
+			DataJSON: json.RawMessage(data),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *SQLite) QueryObservedRelatedToDetections(opts QueryOptions) ([]Event, error) {
+	limit := opts.Limit
+	if limit <= 0 || limit > 100000 {
+		limit = 100000
+	}
+	opts.Contains = strings.TrimSpace(opts.Contains)
+	opts.Path = strings.TrimSpace(opts.Path)
+	opts.DstIP = strings.TrimSpace(opts.DstIP)
+	return s.queryObservedRelatedToDetections(opts, limit)
+}
+
 func (s *SQLite) queryDetections(opts QueryOptions, limit int) ([]Event, error) {
 	where := []string{`run_id=?`}
 	args := []any{opts.RunID}
@@ -147,6 +253,10 @@ func (s *SQLite) queryDetections(opts QueryOptions, limit int) ([]Event, error) 
 	if opts.SinceTS > 0 {
 		where = append(where, `ts>=?`)
 		args = append(args, opts.SinceTS)
+	}
+	if opts.UntilTS > 0 {
+		where = append(where, `ts<=?`)
+		args = append(args, opts.UntilTS)
 	}
 	if opts.Contains != "" {
 		where = append(where, `(rule_id LIKE ? OR message LIKE ?)`)

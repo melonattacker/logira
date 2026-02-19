@@ -125,24 +125,29 @@ View and explain the last run:
 
 ```bash
 ./logira view last
+./logira view last --ts both
+./logira view last --color always
 ./logira explain last
+./logira explain last --show-related
+./logira explain last --drill 35
 ```
 
 Query events:
 
 ```bash
-./logira query --run last --type detection
-./logira query --run last --type net --dest 140.82.121.4:443
-./logira query --run last --contains curl
+./logira query last --type detection
+./logira query last --type net --dest 140.82.121.4:443
+./logira query last --related-to-detections --type net
+./logira query last --contains curl
 ```
 
 ## Commands
 
 - `logira run -- <command...>`: run a command under audit and auto-save a new run
 - `logira runs`: list saved runs
-- `logira view [last|<run-id>]`: view a run summary
-- `logira query [filters...]`: search events in a run
-- `logira explain [last|<run-id>]`: explain detections for a run
+- `logira view [last|<run-id>]`: run dashboard (use `--raw` for legacy text)
+- `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
+- `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
 
 Rules:
 - built-in default ruleset only (`internal/detect/rules/default_rules.yaml`)

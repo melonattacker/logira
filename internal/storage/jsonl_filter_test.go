@@ -37,9 +37,10 @@ func TestFilter_Basic(t *testing.T) {
 			Type:    TypeDetection,
 			Summary: "[high] R4: curl|sh pattern",
 			DataJSON: mustJSON(t, Detection{
-				RuleID:   "R4",
-				Severity: "high",
-				Message:  "curl piped to shell",
+				RuleID:          "R4",
+				Severity:        "high",
+				Message:         "curl piped to shell",
+				RelatedEventSeq: 2,
 			}),
 		},
 		{
@@ -74,6 +75,11 @@ func TestFilter_Basic(t *testing.T) {
 	out = Filter(evs, QueryOptions{RunID: "r1", Contains: "curl piped"})
 	if len(out) != 1 || out[0].Seq != 3 {
 		t.Fatalf("expected contains to match detection seq=3, got %#v", out)
+	}
+
+	out = Filter(evs, QueryOptions{RunID: "r1", RelatedToDetections: true})
+	if len(out) != 1 || out[0].Seq != 2 {
+		t.Fatalf("expected related event seq=2, got %#v", out)
 	}
 }
 
