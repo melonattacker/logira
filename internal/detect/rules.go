@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"regexp"
 	"text/template"
 
 	"github.com/melonattacker/logira/internal/storage"
@@ -27,8 +28,11 @@ type FileWhen struct {
 	Prefix         string   `yaml:"prefix"`
 	PrefixAny      []string `yaml:"prefix_any"`
 	PathIn         []string `yaml:"path_in"`
+	PathRegex      string   `yaml:"path_regex"`
 	OpIn           []string `yaml:"op_in"`
 	RequireExecBit bool     `yaml:"require_exec_bit"`
+
+	pathRegexRE *regexp.Regexp `yaml:"-"`
 }
 
 type NetWhen struct {

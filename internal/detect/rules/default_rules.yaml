@@ -104,6 +104,62 @@ rules:
         op_in: ["create", "modify"]
     message: "write package registry credentials: {{file.op}} {{file.path}}"
 
+  - id: "F020"
+    title: "Read SSH private key"
+    type: "file"
+    severity: "high"
+    when:
+      file:
+        path_regex: "^$HOME/\\.ssh/id_(rsa|ed25519|ecdsa|dsa)$"
+        op_in: ["open"]
+    message: "read ssh private key: {{file.op}} {{file.path}}"
+
+  - id: "F021"
+    title: "Read AWS credentials/config"
+    type: "file"
+    severity: "high"
+    when:
+      file:
+        path_in:
+          - "$HOME/.aws/credentials"
+          - "$HOME/.aws/config"
+        op_in: ["open"]
+    message: "read aws credentials/config: {{file.op}} {{file.path}}"
+
+  - id: "F022"
+    title: "Read kube config"
+    type: "file"
+    severity: "high"
+    when:
+      file:
+        path_in:
+          - "$HOME/.kube/config"
+        op_in: ["open"]
+    message: "read kube config: {{file.op}} {{file.path}}"
+
+  - id: "F023"
+    title: "Read docker config"
+    type: "file"
+    severity: "medium"
+    when:
+      file:
+        path_in:
+          - "$HOME/.docker/config.json"
+        op_in: ["open"]
+    message: "read docker config: {{file.op}} {{file.path}}"
+
+  - id: "F024"
+    title: "Read netrc/git credentials"
+    type: "file"
+    severity: "high"
+    when:
+      file:
+        path_in:
+          - "$HOME/.netrc"
+          - "$HOME/.git-credentials"
+        op_in: ["open"]
+    message: "read netrc/git credentials: {{file.op}} {{file.path}}"
+
   # B) Persistence / System Modification
   - id: "F100"
     title: "Write under /etc"

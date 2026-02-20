@@ -18,6 +18,7 @@ Each run is auto-saved locally so you can review it later (`view`), search it (`
 logira includes an opinionated, observe-only default ruleset aimed at auditing AI agent runs.
 
 - Credential and secrets writes: `~/.ssh`, `~/.aws`, kube/gcloud/docker config, `.netrc`, `.git-credentials`, registry creds.
+- Sensitive credential reads: SSH private keys, AWS credentials/config, kubeconfig, docker config, `.netrc`, `.git-credentials`.
 - Persistence and config changes: writes under `/etc`, systemd units, cron, user autostart entries, shell startup files.
 - Temp droppers: executable files created under `/tmp`, `/dev/shm`, `/var/tmp`.
 - Suspicious exec patterns: `curl|sh`, `wget|sh`, tunneling/reverse shell tools and flags, base64 decode with shell hints.
@@ -151,6 +152,7 @@ Query events:
 
 Rules:
 - built-in default ruleset only (`internal/detect/rules/default_rules.yaml`)
+- file event retention is rule-driven by file rules; `--watch` is deprecated compatibility only
 
 ## Where Is Data Stored?
 

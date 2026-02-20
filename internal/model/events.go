@@ -12,6 +12,9 @@ type ExecDetail struct {
 type FileDetail struct {
 	Op            string `json:"op"`
 	Path          string `json:"path"`
+	PID           int    `json:"pid,omitempty"`
+	PPID          int    `json:"ppid,omitempty"`
+	UID           int    `json:"uid,omitempty"`
 	SizeBefore    *int64 `json:"size_before,omitempty"`
 	SizeAfter     *int64 `json:"size_after,omitempty"`
 	HashBefore    string `json:"hash_before,omitempty"`

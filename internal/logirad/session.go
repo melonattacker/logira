@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -132,6 +133,9 @@ func (s *session) handleObservedEvent(ev collector.Event) error {
 		if !ok {
 			return nil
 		}
+		if s.detector != nil && !s.detector.ShouldRecordFile(d) {
+			return nil
+		}
 		summary = fmt.Sprintf("file %s %s", d.Op, d.Path)
 		attrs.Path = d.Path
 		ev.Detail, _ = json.Marshal(d)
@@ -168,33 +172,24 @@ func (s *session) normalizeFileDetail(ev collector.Event) (model.FileDetail, boo
 	if err := json.Unmarshal(ev.Detail, &d); err != nil {
 		return d, false
 	}
+	if d.PID <= 0 {
+		d.PID = ev.PID
+	}
+	if d.UID <= 0 {
+		d.UID = ev.UID
+	}
+	if d.PPID <= 0 {
+		if ev.PPID > 0 {
+			d.PPID = ev.PPID
+		} else if ev.PID > 0 {
+			d.PPID = logiradProcPPID(ev.PID)
+		}
+	}
 
-	// Watch paths filter: keep volume bounded like the legacy watcher.
 	abs := s.resolvePath(ev.PID, d.Path)
 	abs = filepath.Clean(strings.TrimSpace(abs))
 	if abs == "" {
 		return d, false
-	}
-
-	if len(s.meta.WatchPaths) > 0 {
-		ok := false
-		for _, w := range s.meta.WatchPaths {
-			wp := strings.TrimSpace(w)
-			if wp == "" {
-				continue
-			}
-			if !filepath.IsAbs(wp) {
-				wp = filepath.Join(s.meta.CWD, wp)
-			}
-			wp = filepath.Clean(wp)
-			if wp == abs || strings.HasPrefix(abs, wp+string(os.PathSeparator)) {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			return d, false
-		}
 	}
 
 	d.Path = abs
@@ -216,6 +211,27 @@ func (s *session) resolvePath(pid int, p string) string {
 		}
 	}
 	return filepath.Join(s.meta.CWD, p)
+}
+
+func logiradProcPPID(pid int) int {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0
+	}
+	s := string(b)
+	r := strings.LastIndex(s, ")")
+	if r == -1 || r+2 >= len(s) {
+		return 0
+	}
+	fields := strings.Fields(s[r+2:])
+	if len(fields) < 3 {
+		return 0
+	}
+	ppid, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return 0
+	}
+	return ppid
 }
 
 func execSummary(d model.ExecDetail) string {

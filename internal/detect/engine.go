@@ -3,6 +3,7 @@ package detect
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,13 @@ func NewEngine(homeDir string) (*Engine, error) {
 		return nil, err
 	}
 	for _, r := range rules {
+		if r.Type == storage.TypeFile && r.When.File != nil && strings.TrimSpace(r.When.File.PathRegex) != "" {
+			re, err := compilePathRegex(r.When.File.PathRegex, e.home)
+			if err != nil {
+				return nil, fmt.Errorf("rule %s: compile path_regex: %w", r.ID, err)
+			}
+			r.When.File.pathRegexRE = re
+		}
 		e.rulesByType[r.Type] = append(e.rulesByType[r.Type], r)
 	}
 	return e, nil
@@ -63,35 +71,35 @@ func (e *Engine) Evaluate(typ storage.EventType, data json.RawMessage) []storage
 	}
 }
 
+// ShouldRecordFile reports whether a file event matches at least one file rule.
+// This is used to keep file event volume bounded using the active ruleset.
+func (e *Engine) ShouldRecordFile(d model.FileDetail) bool {
+	rs := e.rulesByType[storage.TypeFile]
+	if len(rs) == 0 {
+		return false
+	}
+	path := normalizeFilePath(d.Path)
+	if path == "" {
+		return false
+	}
+	for _, r := range rs {
+		if e.matchFileRule(r, d, path) {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *Engine) evalFileRules(rs []Rule, d model.FileDetail) []storage.Detection {
-	path := strings.TrimSpace(d.Path)
+	path := normalizeFilePath(d.Path)
 	if path == "" {
 		return nil
 	}
-	path = filepath.Clean(path)
 
 	out := make([]storage.Detection, 0, 2)
 	for _, r := range rs {
-		w := r.When.File
-		if w == nil {
+		if !e.matchFileRule(r, d, path) {
 			continue
-		}
-		if !stringInSlice(d.Op, w.OpIn) {
-			continue
-		}
-
-		if !matchFilePath(*w, e.home, path) {
-			continue
-		}
-
-		if w.RequireExecBit {
-			fi, err := os.Stat(path)
-			if err != nil {
-				continue
-			}
-			if fi.Mode()&0o111 == 0 {
-				continue
-			}
 		}
 
 		msg := e.renderMessage(r, map[string]any{
@@ -107,6 +115,37 @@ func (e *Engine) evalFileRules(rs []Rule, d model.FileDetail) []storage.Detectio
 		})
 	}
 	return out
+}
+
+func normalizeFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
+}
+
+func (e *Engine) matchFileRule(r Rule, d model.FileDetail, path string) bool {
+	w := r.When.File
+	if w == nil {
+		return false
+	}
+	if !stringInSlice(strings.ToLower(strings.TrimSpace(d.Op)), w.OpIn) {
+		return false
+	}
+	if !matchFilePath(w, e.home, path) {
+		return false
+	}
+	if w.RequireExecBit {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return false
+		}
+		if fi.Mode()&0o111 == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Engine) evalNetRules(rs []Rule, d model.NetDetail) []storage.Detection {
@@ -260,7 +299,11 @@ func intInSlice(v int, xs []int) bool {
 	return false
 }
 
-func matchFilePath(w FileWhen, home, path string) bool {
+func matchFilePath(w *FileWhen, home, path string) bool {
+	if w == nil {
+		return false
+	}
+
 	// Exact match list.
 	if len(w.PathIn) > 0 {
 		for _, p := range w.PathIn {
@@ -287,6 +330,18 @@ func matchFilePath(w FileWhen, home, path string) bool {
 			}
 		}
 		return false
+	}
+
+	if w.pathRegexRE != nil {
+		return w.pathRegexRE.MatchString(path)
+	}
+
+	if strings.TrimSpace(w.PathRegex) != "" {
+		re, err := compilePathRegex(w.PathRegex, home)
+		if err != nil {
+			return false
+		}
+		return re.MatchString(path)
 	}
 
 	// Single prefix (existing behavior).

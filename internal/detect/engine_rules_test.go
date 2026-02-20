@@ -103,6 +103,143 @@ func TestEngine_Evaluate_DSL_FilePathInAndPrefixAny(t *testing.T) {
 	}
 }
 
+func TestEngine_Evaluate_SensitiveReadOpen(t *testing.T) {
+	home := "/home/u"
+	e := mustEngine(t, home)
+
+	tests := []struct {
+		name     string
+		path     string
+		wantRule string
+	}{
+		{
+			name:     "ssh private key",
+			path:     filepath.Join(home, ".ssh", "id_ed25519"),
+			wantRule: "F020",
+		},
+		{
+			name:     "aws credentials",
+			path:     filepath.Join(home, ".aws", "credentials"),
+			wantRule: "F021",
+		},
+		{
+			name:     "kube config",
+			path:     filepath.Join(home, ".kube", "config"),
+			wantRule: "F022",
+		},
+		{
+			name:     "docker config",
+			path:     filepath.Join(home, ".docker", "config.json"),
+			wantRule: "F023",
+		},
+		{
+			name:     "git credentials",
+			path:     filepath.Join(home, ".git-credentials"),
+			wantRule: "F024",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b, _ := json.Marshal(model.FileDetail{Op: "open", Path: tc.path})
+			ds := e.Evaluate(storage.TypeFile, b)
+			found := false
+			for _, d := range ds {
+				if d.RuleID == tc.wantRule {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected %s for %s, got %+v", tc.wantRule, tc.path, ds)
+			}
+		})
+	}
+}
+
+func TestEngine_Evaluate_SensitiveReadNoMatch(t *testing.T) {
+	home := "/home/u"
+	e := mustEngine(t, home)
+
+	tests := []string{
+		filepath.Join(home, ".ssh", "id_ed25519.pub"),
+		filepath.Join(home, "notes.txt"),
+	}
+	for _, p := range tests {
+		b, _ := json.Marshal(model.FileDetail{Op: "open", Path: p})
+		ds := e.Evaluate(storage.TypeFile, b)
+		for _, d := range ds {
+			switch d.RuleID {
+			case "F020", "F021", "F022", "F023", "F024":
+				t.Fatalf("unexpected sensitive read rule %s for %s: %+v", d.RuleID, p, ds)
+			}
+		}
+	}
+}
+
+func TestEngine_Evaluate_DSL_FilePathRegex(t *testing.T) {
+	rulesYAML := []byte(`
+rules:
+  - id: "F900"
+    title: "Dotenv read"
+    type: "file"
+    severity: "medium"
+    when:
+      file:
+        path_regex: "^/tmp/.+/.env(\\..+)?$"
+        op_in: ["open"]
+    message: "dotenv opened: {{file.path}}"
+`)
+	rs, err := LoadRulesYAML(rulesYAML)
+	if err != nil {
+		t.Fatalf("LoadRulesYAML: %v", err)
+	}
+	e := &Engine{
+		home: "/home/u",
+		rulesByType: map[storage.EventType][]Rule{
+			storage.TypeFile: rs,
+		},
+	}
+
+	b, _ := json.Marshal(model.FileDetail{Op: "open", Path: "/tmp/app/.env.production"})
+	ds := e.Evaluate(storage.TypeFile, b)
+	if len(ds) != 1 || ds[0].RuleID != "F900" {
+		t.Fatalf("expected F900 for dotenv path, got %+v", ds)
+	}
+
+	b, _ = json.Marshal(model.FileDetail{Op: "open", Path: "/tmp/app/config.yaml"})
+	ds = e.Evaluate(storage.TypeFile, b)
+	if len(ds) != 0 {
+		t.Fatalf("expected no match for non-dotenv path, got %+v", ds)
+	}
+}
+
+func TestEngine_ShouldRecordFile(t *testing.T) {
+	home := "/home/u"
+	e := mustEngine(t, home)
+
+	if !e.ShouldRecordFile(model.FileDetail{
+		Op:   "open",
+		Path: filepath.Join(home, ".netrc"),
+	}) {
+		t.Fatalf("expected .netrc open to be recorded")
+	}
+
+	if e.ShouldRecordFile(model.FileDetail{
+		Op:   "open",
+		Path: filepath.Join(home, ".ssh", "id_ed25519.pub"),
+	}) {
+		t.Fatalf("did not expect .pub key to be recorded by sensitive-read rules")
+	}
+
+	if e.ShouldRecordFile(model.FileDetail{
+		Op:   "open",
+		Path: filepath.Join(home, "notes.txt"),
+	}) {
+		t.Fatalf("did not expect unrelated file open to be recorded")
+	}
+}
+
 func TestEngine_Evaluate_DSL_NetPortInAndIPIn(t *testing.T) {
 	e := mustEngine(t, "/home/u")
 

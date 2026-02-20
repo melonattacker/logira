@@ -43,7 +43,7 @@ func realMain() int {
 		EnableExec: enableExec,
 		EnableFile: enableFile,
 		EnableNet:  enableNet,
-		// watch paths are per-run, filtered in userspace.
+		// file event retention is rule-driven in session userspace handling.
 	}
 
 	col := collector.New(cfg)

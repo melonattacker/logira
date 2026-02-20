@@ -168,6 +168,8 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		detail := model.FileDetail{
 			Op:       op,
 			Path:     cString(raw.Filename[:]),
+			PID:      int(raw.PID),
+			UID:      int(raw.UID),
 			CgroupID: raw.CgroupID,
 		}
 		b, err := json.Marshal(detail)
@@ -220,18 +222,23 @@ func (t *Tracer) Stop(ctx context.Context) error {
 }
 
 func opFromFlags(flags uint32) string {
-	// Minimal interpretation: treat create as create, any write access as modify.
+	// Minimal interpretation: create beats modify, modify beats open(read-only).
 	const (
-		oWRONLY = 1
-		oRDWR   = 2
-		oCREAT  = 0x40
-		oTRUNC  = 0x200
+		oACCMODE = 3
+		oRDONLY  = 0
+		oWRONLY  = 1
+		oRDWR    = 2
+		oCREAT   = 0x40
+		oTRUNC   = 0x200
 	)
 	if flags&oCREAT != 0 {
 		return "create"
 	}
 	if flags&(oWRONLY|oRDWR|oTRUNC) != 0 {
 		return "modify"
+	}
+	if flags&oACCMODE == oRDONLY {
+		return "open"
 	}
 	return ""
 }

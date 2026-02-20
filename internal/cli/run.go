@@ -50,7 +50,7 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
-	fs.Var(&watch, "watch", "watch path for file events (repeatable)")
+	fs.Var(&watch, "watch", "deprecated compatibility flag; file event retention is rule-driven")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
 	fs.BoolVar(&enableNet, "net", true, "enable network tracing")
@@ -72,12 +72,11 @@ func RunCommand(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errors.New("no agent command provided")
 	}
-	if len(watch) == 0 {
-		watch = append(watch, ".")
-	}
-
 	if strings.TrimSpace(logPath) != "" {
 		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.logira/runs/<run-id>/")
+	}
+	if len(watch) > 0 {
+		fmt.Fprintln(os.Stderr, "warning: --watch is deprecated; file event retention is now driven by detection rules")
 	}
 
 	home, err := runs.EnsureHome()
@@ -243,11 +242,11 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
 	fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
 	fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
+	fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
-	fmt.Fprintf(w, "  %s run --watch . --watch /etc -- bash -lc 'echo hi > x.txt; cat /etc/hosts >/dev/null'\n", prog)
 	fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
 	fmt.Fprintln(w, "Flags:")

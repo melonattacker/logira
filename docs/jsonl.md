@@ -4,6 +4,8 @@ logira stores one JSON object per line in `events.jsonl` under each run director
 
 `$LOGIRA_HOME/runs/<run-id>/events.jsonl`
 
+File event retention is rule-driven (based on active file detection rules), not path-watch driven.
+
 Common fields:
 - `run_id`: run identifier
 - `seq`: per-run sequence number (monotonic)
@@ -49,18 +51,22 @@ Common fields:
   "ts": 1771100131123456789,
   "type": "file",
   "pid": 1234,
-  "summary": "file modify /workspace/x.txt",
+  "summary": "file open /home/u/.aws/credentials",
   "data_json": {
-    "op": "modify",
-    "path": "/workspace/x.txt",
+    "op": "open",
+    "path": "/home/u/.aws/credentials",
+    "pid": 1234,
+    "ppid": 1200,
+    "uid": 1000,
     "cgroup_id": 4567890123
   }
 }
 ```
 
 `data_json` fields (best-effort):
-- `op`: `create` | `modify` | `delete`
+- `op`: `create` | `modify` | `delete` | `open`
 - `path`: affected path
+- `pid`, `ppid`, `uid`: process metadata also recorded inside file detail (best-effort)
 - `cgroup_id`: kernel cgroup id if available
 - `size_before`, `size_after`: bytes (if known; may be absent)
 - `hash_before`, `hash_after`: SHA-256 (best-effort; may be absent)

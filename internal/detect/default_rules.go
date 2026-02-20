@@ -93,7 +93,7 @@ func validateAndCompileRule(r *Rule) error {
 		if r.When.File == nil {
 			return fmt.Errorf("missing when.file")
 		}
-		if err := validateFileWhen(*r.When.File); err != nil {
+		if err := validateFileWhen(r.When.File); err != nil {
 			return err
 		}
 	case storage.TypeNet:
@@ -130,7 +130,10 @@ func normalizeTemplate(s string) string {
 	return fieldTemplateRe.ReplaceAllString(s, "{{.$1.")
 }
 
-func validateFileWhen(w FileWhen) error {
+func validateFileWhen(w *FileWhen) error {
+	if w == nil {
+		return fmt.Errorf("missing when.file")
+	}
 	set := 0
 	if strings.TrimSpace(w.Prefix) != "" {
 		set++
@@ -141,10 +144,57 @@ func validateFileWhen(w FileWhen) error {
 	if len(w.PathIn) > 0 {
 		set++
 	}
+	if strings.TrimSpace(w.PathRegex) != "" {
+		set++
+	}
 	if set > 1 {
-		return fmt.Errorf("file.when: only one of prefix/prefix_any/path_in may be set")
+		return fmt.Errorf("file.when: only one of prefix/prefix_any/path_in/path_regex may be set")
+	}
+	if set == 0 {
+		return fmt.Errorf("file.when: one of prefix/prefix_any/path_in/path_regex is required")
+	}
+	if len(w.OpIn) == 0 {
+		return fmt.Errorf("file.when: op_in is required")
+	}
+	for i, rawOp := range w.OpIn {
+		op := strings.ToLower(strings.TrimSpace(rawOp))
+		if op == "" {
+			return fmt.Errorf("file.when: op_in contains empty value")
+		}
+		if _, ok := allowedFileOps[op]; !ok {
+			return fmt.Errorf("file.when: invalid op_in value %q", rawOp)
+		}
+		w.OpIn[i] = op
+	}
+	if strings.TrimSpace(w.PathRegex) != "" {
+		re, err := compilePathRegex(w.PathRegex, "")
+		if err != nil {
+			return fmt.Errorf("file.when: invalid path_regex: %w", err)
+		}
+		w.pathRegexRE = re
 	}
 	return nil
+}
+
+var allowedFileOps = map[string]struct{}{
+	"create": {},
+	"modify": {},
+	"delete": {},
+	"open":   {},
+	"read":   {},
+}
+
+func compilePathRegex(pattern, home string) (*regexp.Regexp, error) {
+	s := strings.TrimSpace(pattern)
+	if s == "" {
+		return nil, nil
+	}
+	homeReplacement := regexp.QuoteMeta("$HOME")
+	if strings.TrimSpace(home) != "" {
+		homeReplacement = regexp.QuoteMeta(home)
+	}
+	s = strings.ReplaceAll(s, "$HOME", homeReplacement)
+	return regexp.Compile(s)
 }
 
 func validateNetWhen(w NetWhen) error {
