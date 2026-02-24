@@ -1,0 +1,29 @@
+rules:
+  - id: "XE900"
+    title: "Demo exec marker"
+    type: "exec"
+    severity: "info"
+    when:
+      exec:
+        contains_all: ["logira-demo-marker"]
+    message: "demo exec marker seen: {{exec.filename}}"
+
+  - id: "XF900"
+    title: "Demo file write under /tmp"
+    type: "file"
+    severity: "info"
+    when:
+      file:
+        path_in:
+          - "/tmp/logira-demo-note.txt"
+        op_in: ["create", "modify"]
+    message: "demo file write: {{file.op}} {{file.path}}"
+
+  - id: "XN900"
+    title: "Demo network send activity"
+    type: "net"
+    severity: "info"
+    when:
+      net:
+        op: "send"
+    message: "demo net send: {{net.dst_ip}}:{{net.dst_port}} bytes={{net.bytes}}"

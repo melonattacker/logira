@@ -548,7 +548,7 @@ func buildExplainText(meta runs.Meta, detEvents []storage.Event, sevCounts map[s
 
 	fmt.Fprintf(&b, "\nDetections: %d\n", meta.SuspiciousCount)
 	if meta.SuspiciousCount == 0 {
-		b.WriteString("No detections were produced by the built-in rules.\n")
+		b.WriteString("No detections were produced by the active rules.\n")
 		return b.String()
 	}
 

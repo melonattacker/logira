@@ -43,6 +43,9 @@ type StartRunRequest struct {
 	ArgvMax      int      `json:"argv_max,omitempty"`
 	ArgvMaxBytes int      `json:"argv_max_bytes,omitempty"`
 	HashMaxBytes int64    `json:"hash_max_bytes,omitempty"`
+
+	CustomRulesPath string `json:"custom_rules_path,omitempty"`
+	CustomRulesYAML []byte `json:"custom_rules_yaml,omitempty"`
 }
 
 type StartRunResponse struct {

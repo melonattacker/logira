@@ -102,7 +102,7 @@ Common fields:
 
 ## Detection Event (`type=detection`)
 
-Detection events are derived by built-in rules (observe-only). They are written to `events.jsonl` and indexed separately in SQLite.
+Detection events are derived by the active ruleset (observe-only): the built-in rules plus any per-run custom rules supplied via `logira run --rules`. They are written to `events.jsonl` and indexed separately in SQLite.
 
 ```json
 {

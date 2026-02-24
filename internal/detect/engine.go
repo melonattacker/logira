@@ -19,15 +19,31 @@ type Engine struct {
 }
 
 func NewEngine(homeDir string) (*Engine, error) {
-	e := &Engine{
-		home:        strings.TrimSpace(homeDir),
-		rulesByType: map[storage.EventType][]Rule{},
-	}
 	rules, err := loadActiveRules()
 	if err != nil {
 		return nil, err
 	}
+	return NewEngineWithRules(homeDir, rules)
+}
+
+// NewEngineWithCustomRulesYAML builds an engine using built-in rules plus an
+// optional user-provided rules YAML payload.
+func NewEngineWithCustomRulesYAML(homeDir string, customYAML []byte) (*Engine, error) {
+	rules, err := LoadActiveRulesWithCustomYAML(customYAML)
+	if err != nil {
+		return nil, err
+	}
+	return NewEngineWithRules(homeDir, rules)
+}
+
+// NewEngineWithRules builds an engine from an explicit rule slice.
+func NewEngineWithRules(homeDir string, rules []Rule) (*Engine, error) {
+	e := &Engine{
+		home:        strings.TrimSpace(homeDir),
+		rulesByType: map[storage.EventType][]Rule{},
+	}
 	for _, r := range rules {
+		r = cloneRule(r)
 		if r.Type == storage.TypeFile && r.When.File != nil && strings.TrimSpace(r.When.File.PathRegex) != "" {
 			re, err := compilePathRegex(r.When.File.PathRegex, e.home)
 			if err != nil {
@@ -38,6 +54,30 @@ func NewEngine(homeDir string) (*Engine, error) {
 		e.rulesByType[r.Type] = append(e.rulesByType[r.Type], r)
 	}
 	return e, nil
+}
+
+func cloneRule(in Rule) Rule {
+	out := in
+	if in.When.File != nil {
+		f := *in.When.File
+		f.PrefixAny = append([]string{}, in.When.File.PrefixAny...)
+		f.PathIn = append([]string{}, in.When.File.PathIn...)
+		f.OpIn = append([]string{}, in.When.File.OpIn...)
+		out.When.File = &f
+	}
+	if in.When.Net != nil {
+		n := *in.When.Net
+		n.DstPortIn = append([]int{}, in.When.Net.DstPortIn...)
+		n.DstIPIn = append([]string{}, in.When.Net.DstIPIn...)
+		out.When.Net = &n
+	}
+	if in.When.Exec != nil {
+		x := *in.When.Exec
+		x.ContainsAll = append([]string{}, in.When.Exec.ContainsAll...)
+		x.ContainsAny = append([]string{}, in.When.Exec.ContainsAny...)
+		out.When.Exec = &x
+	}
+	return out
 }
 
 // Evaluate returns zero or more detections for an observed event.

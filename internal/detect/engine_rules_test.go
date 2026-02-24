@@ -330,3 +330,36 @@ func TestEngine_Evaluate_AgentSafety_Default(t *testing.T) {
 		})
 	}
 }
+
+func TestEngine_Evaluate_CustomRulesYAML(t *testing.T) {
+	e, err := NewEngineWithCustomRulesYAML("/home/u", []byte(`
+rules:
+  - id: "X901"
+    title: "Custom sentinel exec"
+    type: "exec"
+    severity: "medium"
+    when:
+      exec:
+        contains_all: ["custom-sentinel-123"]
+    message: "custom exec matched: {{exec.filename}}"
+`))
+	if err != nil {
+		t.Fatalf("NewEngineWithCustomRulesYAML: %v", err)
+	}
+
+	b, _ := json.Marshal(model.ExecDetail{
+		Filename: "/bin/bash",
+		Argv:     []string{"bash", "-lc", "echo custom-sentinel-123"},
+	})
+	ds := e.Evaluate(storage.TypeExec, b)
+	found := false
+	for _, d := range ds {
+		if d.RuleID == "X901" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected custom rule X901, got %+v", ds)
+	}
+}

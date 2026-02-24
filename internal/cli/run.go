@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/melonattacker/logira/internal/detect"
 	"github.com/melonattacker/logira/internal/ipc"
 	"github.com/melonattacker/logira/internal/runs"
 )
@@ -42,6 +44,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	var enableFile bool
 	var enableNet bool
 	var tool string
+	var rulesPath string
 	var argvMax int
 	var argvMaxBytes int
 	var hashMaxBytes int64
@@ -50,6 +53,7 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
+	fs.StringVar(&rulesPath, "rules", "", "path to custom detection rules YAML (appended to built-in rules)")
 	fs.Var(&watch, "watch", "deprecated compatibility flag; file event retention is rule-driven")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
@@ -82,6 +86,27 @@ func RunCommand(ctx context.Context, args []string) error {
 	home, err := runs.EnsureHome()
 	if err != nil {
 		return err
+	}
+
+	var customRulesYAML []byte
+	var customRulesPath string
+	if rp := strings.TrimSpace(rulesPath); rp != "" {
+		b, err := os.ReadFile(rp)
+		if err != nil {
+			return fmt.Errorf("read --rules file %q: %w", rp, err)
+		}
+		if len(bytes.TrimSpace(b)) == 0 {
+			return fmt.Errorf("--rules file %q is empty", rp)
+		}
+		if _, err := detect.LoadActiveRulesWithCustomYAML(b); err != nil {
+			return fmt.Errorf("validate --rules file %q: %w", rp, err)
+		}
+		customRulesYAML = b
+		if abs, err := filepath.Abs(rp); err == nil {
+			customRulesPath = abs
+		} else {
+			customRulesPath = rp
+		}
 	}
 
 	if strings.TrimSpace(tool) == "" {
@@ -117,6 +142,9 @@ func RunCommand(ctx context.Context, args []string) error {
 		ArgvMax:      argvMax,
 		ArgvMaxBytes: argvMaxBytes,
 		HashMaxBytes: hashMaxBytes,
+
+		CustomRulesPath: customRulesPath,
+		CustomRulesYAML: customRulesYAML,
 	}
 
 	startResp, err := client.StartRun(ctx, startReq)
@@ -242,11 +270,13 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
 	fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
 	fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
+	fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
 	fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
+	fmt.Fprintf(w, "  %s run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'\n", prog)
 	fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
 	fmt.Fprintln(w, "Flags:")

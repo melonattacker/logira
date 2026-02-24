@@ -8,17 +8,20 @@ import (
 )
 
 type Meta struct {
-	RunID           string   `json:"run_id"`
-	StartTS         int64    `json:"start_ts"`
-	EndTS           int64    `json:"end_ts,omitempty"`
-	Tool            string   `json:"tool"`
-	Command         string   `json:"command"`
-	CommandArgv     []string `json:"command_argv"`
-	CWD             string   `json:"cwd"`
-	WatchPaths      []string `json:"watch_paths,omitempty"`
-	CgroupPath      string   `json:"cgroup_path,omitempty"`
-	SuspiciousCount int      `json:"suspicious_count"`
-	Version         int      `json:"version"`
+	RunID             string   `json:"run_id"`
+	StartTS           int64    `json:"start_ts"`
+	EndTS             int64    `json:"end_ts,omitempty"`
+	Tool              string   `json:"tool"`
+	Command           string   `json:"command"`
+	CommandArgv       []string `json:"command_argv"`
+	CWD               string   `json:"cwd"`
+	WatchPaths        []string `json:"watch_paths,omitempty"`
+	CustomRules       bool     `json:"custom_rules,omitempty"`
+	CustomRulesPath   string   `json:"custom_rules_path,omitempty"`
+	CustomRulesSHA256 string   `json:"custom_rules_sha256,omitempty"`
+	CgroupPath        string   `json:"cgroup_path,omitempty"`
+	SuspiciousCount   int      `json:"suspicious_count"`
+	Version           int      `json:"version"`
 }
 
 func MetaPath(runDir string) string { return filepath.Join(runDir, "meta.json") }

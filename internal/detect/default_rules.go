@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"regexp"
@@ -24,11 +25,30 @@ func LoadDefaultRules() ([]Rule, error) {
 	return loadBuiltinDefaultRules()
 }
 
+// LoadActiveRulesWithCustomYAML returns the runtime ruleset used for detection.
+// Built-in rules are always included first. If customYAML is non-empty, custom
+// rules are parsed and appended, and duplicate IDs across the merged set are
+// rejected.
+func LoadActiveRulesWithCustomYAML(customYAML []byte) ([]Rule, error) {
+	builtin, err := loadBuiltinDefaultRules()
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(customYAML)) == 0 {
+		return builtin, nil
+	}
+	custom, err := LoadRulesYAML(customYAML)
+	if err != nil {
+		return nil, fmt.Errorf("parse custom rules yaml: %w", err)
+	}
+	return mergeRules(builtin, custom)
+}
+
 // loadActiveRules is the single boundary for selecting runtime detection rules.
 // It currently loads only the built-in default ruleset and exists so future
 // custom-rules support can swap sources without touching engine wiring.
 func loadActiveRules() ([]Rule, error) {
-	return loadBuiltinDefaultRules()
+	return LoadActiveRulesWithCustomYAML(nil)
 }
 
 func loadBuiltinDefaultRules() ([]Rule, error) {
@@ -58,6 +78,25 @@ func LoadRulesYAML(b []byte) ([]Rule, error) {
 		}
 		seen[r.ID] = struct{}{}
 		out = append(out, r)
+	}
+	return out, nil
+}
+
+func mergeRules(sets ...[]Rule) ([]Rule, error) {
+	total := 0
+	for _, rs := range sets {
+		total += len(rs)
+	}
+	out := make([]Rule, 0, total)
+	seen := map[string]struct{}{}
+	for _, rs := range sets {
+		for _, r := range rs {
+			if _, ok := seen[r.ID]; ok {
+				return nil, fmt.Errorf("duplicate rule id %q", r.ID)
+			}
+			seen[r.ID] = struct{}{}
+			out = append(out, r)
+		}
 	}
 	return out, nil
 }

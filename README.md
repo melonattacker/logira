@@ -16,6 +16,7 @@ Each run is auto-saved locally so you can review it later (`view`), search it (`
 ## Default Detections
 
 logira includes an opinionated, observe-only default ruleset aimed at auditing AI agent runs.
+You can also append your own per-run rules YAML with `logira run --rules <file>`.
 
 - Credential and secrets writes: `~/.ssh`, `~/.aws`, kube/gcloud/docker config, `.netrc`, `.git-credentials`, registry creds.
 - Sensitive credential reads: SSH private keys, AWS credentials/config, kubeconfig, docker config, `.netrc`, `.git-credentials`.
@@ -102,6 +103,7 @@ Run an agent under audit as your normal user (events are auto-saved):
 
 ```bash
 ./logira run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'
+./logira run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'
 ```
 
 Run Codex CLI:
@@ -151,7 +153,9 @@ Query events:
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
 
 Rules:
-- built-in default ruleset only (`internal/detect/rules/default_rules.yaml`)
+- built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)
+- optional per-run custom rules can be appended with `logira run --rules <yaml-file>`
+- sample custom rules and trial commands: [`examples/rules/README.md`](examples/rules/README.md)
 - file event retention is rule-driven by file rules; `--watch` is deprecated compatibility only
 
 ## Where Is Data Stored?
@@ -174,6 +178,7 @@ Each run is stored at:
 
 - JSONL schema: [`docs/jsonl.md`](docs/jsonl.md)
 - SQLite schema: [`docs/sqlite.md`](docs/sqlite.md)
+- Custom rule syntax: [`docs/rules.md`](docs/rules.md)
 - Development notes (BPF generation, tests): [`docs/development.md`](docs/development.md)
 
 ## Notes

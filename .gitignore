@@ -3,3 +3,4 @@ demos/*_test.jsonl
 /logira
 /logirad
 !internal/logirad/
+tmp/

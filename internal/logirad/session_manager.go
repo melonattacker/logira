@@ -4,6 +4,8 @@ package logirad
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -125,6 +127,12 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		WatchPaths:  append([]string{}, req.WatchPaths...),
 		Version:     3,
 	}
+	if len(req.CustomRulesYAML) > 0 {
+		sum := sha256.Sum256(req.CustomRulesYAML)
+		meta.CustomRules = true
+		meta.CustomRulesPath = strings.TrimSpace(req.CustomRulesPath)
+		meta.CustomRulesSHA256 = hex.EncodeToString(sum[:])
+	}
 	if err := runs.WriteMeta(runDir, meta); err != nil {
 		return out, err
 	}
@@ -145,7 +153,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		return out, err
 	}
 
-	detector, err := detect.NewEngine(homeDir)
+	detector, err := detect.NewEngineWithCustomRulesYAML(homeDir, req.CustomRulesYAML)
 	if err != nil {
 		_ = cg.Remove()
 		return out, fmt.Errorf("load rules: %w", err)

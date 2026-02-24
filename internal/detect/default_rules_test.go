@@ -34,6 +34,51 @@ func TestLoadActiveRules(t *testing.T) {
 	}
 }
 
+func TestLoadActiveRulesWithCustomYAML_AppendsCustomRules(t *testing.T) {
+	custom := []byte(`
+rules:
+  - id: "X900"
+    title: "Custom exec marker"
+    type: "exec"
+    severity: "low"
+    when:
+      exec:
+        contains_all: ["logira-custom-marker"]
+    message: "custom marker"
+`)
+	rs, err := LoadActiveRulesWithCustomYAML(custom)
+	if err != nil {
+		t.Fatalf("LoadActiveRulesWithCustomYAML: %v", err)
+	}
+	found := false
+	for _, r := range rs {
+		if r.ID == "X900" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected custom rule X900 to be present")
+	}
+}
+
+func TestLoadActiveRulesWithCustomYAML_DuplicateIDAgainstBuiltin(t *testing.T) {
+	custom := []byte(`
+rules:
+  - id: "F001"
+    title: "Duplicate builtin"
+    type: "exec"
+    severity: "low"
+    when:
+      exec:
+        contains_all: ["x"]
+    message: "dup"
+`)
+	if _, err := LoadActiveRulesWithCustomYAML(custom); err == nil {
+		t.Fatalf("expected duplicate rule id error")
+	}
+}
+
 func TestLoadRulesYAML_FilePathRegex(t *testing.T) {
 	yaml := []byte(`
 rules:
