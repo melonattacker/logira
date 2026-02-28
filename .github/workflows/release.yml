@@ -85,6 +85,9 @@ jobs:
       - name: Generate BPF objects
         run: make generate
 
+      - name: Run unit tests
+        run: go test ./...
+
       - name: Build binaries
         env:
           GOOS: linux
