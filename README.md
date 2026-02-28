@@ -2,6 +2,10 @@
 
 **OS-level runtime auditing for unpredictable automation.**
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d8b53356-e0ee-4a7e-b232-8548ba216610" width="900">
+</p>
+
 `logira` is an observe-only Linux CLI that records runtime `exec`, `file`, and `net` events via eBPF. It helps you see what actually happened during AI agent runs and other forms of automation, with per-run local storage for auditing, post-run review, search, and detection triage.
 
 ## What is logira?
