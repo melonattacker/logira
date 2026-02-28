@@ -219,3 +219,10 @@ The installer places:
 - BPF objects: `/usr/local/lib/logira/bpf/`
 - systemd unit: `/etc/systemd/system/logirad.service`
 - environment file: `/etc/logira/logirad.env` (sets `LOGIRA_EXEC_BPF_OBJ`, `LOGIRA_NET_BPF_OBJ`, `LOGIRA_FILE_BPF_OBJ`)
+
+## License
+Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+eBPF programs under `collector/linux/` are dual-licensed: Apache-2.0 OR GPL-2.0-only. 
+
+This ensures compatibility with the Linux kernel when loading eBPF programs that require GPL-only helpers.
