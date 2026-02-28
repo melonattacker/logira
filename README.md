@@ -1,24 +1,24 @@
 # logira
 
-**Runtime monitoring for agentic workflows.**
+**OS-level runtime auditing for unpredictable automation.**
 
-`logira` is an observe-only Linux CLI auditor that records runtime `exec`, `file`, and `net` events via eBPF. It is useful for AI agent workflows and general automation, with per-run local storage for auditability, post-run review, search, and detection triage.
+`logira` is an observe-only Linux CLI that records runtime `exec`, `file`, and `net` events via eBPF. It helps you see what actually happened during AI agent runs and other forms of automation, with per-run local storage for auditing, post-run review, search, and detection triage.
 
 ## What is logira?
 
 - eBPF-based runtime collection of process execution, file activity, and network activity.
-- cgroup v2 run-scoped tracking so events can be attributed to a single audited run.
-- Per-run local storage in JSONL + SQLite for timeline review and fast querying.
-- Built-in default detection rules plus optional custom YAML rules.
-- Observe-only design: logira records and detects; it does not enforce or block.
+- cgroup v2 run-scoped tracking, so events can be attributed to a single audited run.
+- Per-run local storage in JSONL and SQLite for timeline review and fast querying.
+- Built-in default detection rules, with optional custom YAML rules.
+- Observe-only by design: logira records and detects, but does not enforce or block.
 
 ## Why logira?
 
-- Audit what an AI agent actually executed, changed, and contacted (for example `codex --yolo` or `claude --dangerously-skip-permissions` runs).
-- Keep a trustworthy execution trail independent of an agent's textual narrative.
-- Detect risky behavior patterns such as credentials access, destructive commands, persistence changes, and suspicious network egress.
-- Review and share forensic evidence after a run using structured event history and detections.
-- Add lightweight runtime monitoring to local automation or CI tasks without changing workload behavior.
+- Audit what an AI agent actually executed, changed, and connected to during a run (for example, `codex --yolo` or `claude --dangerously-skip-permissions`).
+- Keep a trustworthy execution trail that does not depend on the agent’s own textual narrative.
+- Detect risky behavior patterns such as credential access, destructive commands, persistence changes, and suspicious network egress.
+- Review and share forensic evidence after a run using structured event history and detection results.
+- Add lightweight runtime auditing to local automation or CI tasks without changing workload behavior.
 
 ## Default Detections
 
