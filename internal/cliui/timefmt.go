@@ -43,6 +43,13 @@ func FormatTimestamp(ts, startTS int64, mode TSMode) string {
 	}
 }
 
+func FormatDateTimeShort(ts int64) string {
+	if ts <= 0 {
+		return "-"
+	}
+	return time.Unix(0, ts).UTC().Format("2006-01-02 15:04Z")
+}
+
 func FormatAbsShort(ts int64) string {
 	if ts <= 0 {
 		return "-"

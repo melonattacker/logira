@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/melonattacker/logira/internal/cliui"
 	"github.com/melonattacker/logira/internal/runs"
 )
 
@@ -19,9 +19,19 @@ func RunsCommand(ctx context.Context, args []string) error {
 	_ = ctx
 	fs := newFlagSet("runs", args, runsUsage)
 
-	var asJSON bool
+	var (
+		asJSON  bool
+		noColor bool
+		colorS  string
+	)
 	fs.BoolVar(&asJSON, "json", false, "emit JSON")
+	fs.BoolVar(&noColor, "no-color", false, "disable ANSI colors")
+	fs.StringVar(&colorS, "color", "auto", "color mode: auto|always|never")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	colorMode, err := cliui.ParseColorMode(colorS)
+	if err != nil {
 		return err
 	}
 
@@ -80,19 +90,39 @@ func RunsCommand(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	clr := cliui.NewColorizer(colorMode, noColor, os.Stdout)
+
+	tableRows := make([][]string, 0, len(rows))
 	for _, r := range rows {
-		start := time.Unix(0, r.StartTS).UTC().Format(time.RFC3339)
-		end := ""
-		if r.EndTS > 0 {
-			end = time.Unix(0, r.EndTS).UTC().Format(time.RFC3339)
+		started := cliui.FormatDateTimeShort(r.StartTS)
+		dur := "-"
+		if r.StartTS > 0 && r.EndTS > 0 && r.EndTS >= r.StartTS {
+			dur = cliui.FormatDuration(r.StartTS, r.EndTS)
 		}
 		cmd := strings.TrimSpace(r.Command)
 		if cmd == "" {
 			cmd = "<unknown>"
 		}
-		fmt.Fprintf(os.Stdout, "%s  start=%s  end=%s  suspicious=%d  tool=%s  cmd=%s\n",
-			r.RunID, start, end, r.SuspiciousCount, r.Tool, cmd)
+		detStr := fmt.Sprintf("%d", r.SuspiciousCount)
+		if r.SuspiciousCount > 0 {
+			detStr = clr.Warn(detStr)
+		}
+		tableRows = append(tableRows, []string{
+			r.RunID,
+			started,
+			dur,
+			cliui.Truncate(cmd, 40),
+			detStr,
+		})
 	}
+
+	cliui.RenderTable(os.Stdout, []cliui.Column{
+		{Name: "run_id", MaxWidth: 20},
+		{Name: "started", MaxWidth: 18},
+		{Name: "dur", MaxWidth: 10, AlignRight: true},
+		{Name: "cmd", MaxWidth: 40},
+		{Name: "detections", MaxWidth: 10, AlignRight: true},
+	}, tableRows)
 	return nil
 }
 
@@ -100,7 +130,7 @@ func runsUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
 	fmt.Fprintf(w, "%s runs: list saved runs\n\n", prog)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s runs [--json]\n\n", prog)
+	fmt.Fprintf(w, "  %s runs [--json] [--no-color] [--color auto|always|never]\n\n", prog)
 
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintf(w, "  %s runs\n", prog)

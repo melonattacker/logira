@@ -91,6 +91,13 @@ func (c Colorizer) Severity(v string) string {
 	}
 }
 
+func (c Colorizer) Warn(v string) string {
+	if !c.Enabled {
+		return v
+	}
+	return wrap(v, "31")
+}
+
 func (c Colorizer) Type(v string) string {
 	if !c.Enabled {
 		return v

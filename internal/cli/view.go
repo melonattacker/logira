@@ -77,6 +77,8 @@ func ViewCommand(ctx context.Context, args []string) error {
 	eventCounts := map[storage.EventType]int{}
 	sevCounts := map[string]int{"info": 0, "low": 0, "medium": 0, "high": 0}
 	groups := make([]groupedDetection, 0, limit)
+	var topExec, topPaths, topDest []storage.TopPair
+	const topN = 5
 
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
 		defer sqlite.Close()
@@ -119,6 +121,9 @@ func ViewCommand(ctx context.Context, args []string) error {
 				})
 			}
 		}
+		topExec, _ = sqlite.TopExec(runID, topN)
+		topPaths, _ = sqlite.TopPaths(runID, topN)
+		topDest, _ = sqlite.TopDestinations(runID, topN)
 	} else {
 		all, rerr := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
 		if rerr != nil {
@@ -137,6 +142,9 @@ func ViewCommand(ctx context.Context, args []string) error {
 		if len(groups) == 0 {
 			groups = groupDetectionsFromEvents(all, limit)
 		}
+		topExec = topExecFromEvents(all, topN)
+		topPaths = topPathsFromEvents(all, topN)
+		topDest = topDestinationsFromEvents(all, topN)
 	}
 
 	if tool == "" {
@@ -149,19 +157,19 @@ func ViewCommand(ctx context.Context, args []string) error {
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s  tool=%s  dur=%s  cmd=%q\n", runID, tool, dur, cliui.Truncate(command, 96))
-	fmt.Fprintf(os.Stdout, "Window %s .. %s\n\n", cliui.FormatAbsShort(runStartTS), cliui.FormatAbsShort(runEndTS))
+	fmt.Fprintf(os.Stdout, "Run %s\n", runID)
+	fmt.Fprintf(os.Stdout, "  command:  %s\n", cliui.Truncate(command, 96))
+	fmt.Fprintf(os.Stdout, "  tool:     %s\n", tool)
+	fmt.Fprintf(os.Stdout, "  duration: %s\n", dur)
+	fmt.Fprintf(os.Stdout, "  window:   %s .. %s\n\n", cliui.FormatAbsShort(runStartTS), cliui.FormatAbsShort(runEndTS))
 
 	detTotal := sevCounts["info"] + sevCounts["low"] + sevCounts["medium"] + sevCounts["high"]
 	execCount := eventCounts[storage.TypeExec]
 	fileCount := eventCounts[storage.TypeFile]
 	netCount := eventCounts[storage.TypeNet]
-	detectionWord := clr.Type("detections")
-	fmt.Fprintf(
-		os.Stdout,
-		"Counts   exec=%d  file=%d  net=%d  %s=%d (info=%d low=%d med=%d high=%d)\n\n",
-		execCount, fileCount, netCount, detectionWord, detTotal,
-		sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"],
+	fmt.Fprintf(os.Stdout, "Events       exec=%d  file=%d  net=%d\n", execCount, fileCount, netCount)
+	fmt.Fprintf(os.Stdout, "Detections   %d total  (info=%d low=%d med=%d high=%d)\n\n",
+		detTotal, sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"],
 	)
 
 	fmt.Fprintln(os.Stdout, "Top detections (grouped)")
@@ -198,6 +206,10 @@ func ViewCommand(ctx context.Context, args []string) error {
 			{Name: "extra", MaxWidth: 48},
 		}, rows)
 	}
+
+	renderTopSection(os.Stdout, "Top commands", topExec)
+	renderTopSection(os.Stdout, "Top file paths", topPaths)
+	renderTopSection(os.Stdout, "Top destinations", topDest)
 
 	fmt.Fprintln(os.Stdout, "\nHints:")
 	fmt.Fprintf(os.Stdout, "- %s explain %s --show-related\n", progName(), runID)
@@ -337,6 +349,21 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 	printTopPairs("Changed Files", topPaths)
 	printTopPairs("Destinations", topDest)
 	return nil
+}
+
+func renderTopSection(w io.Writer, title string, pairs []storage.TopPair) {
+	if len(pairs) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\n%s (%d)\n", title, len(pairs))
+	rows := make([][]string, 0, len(pairs))
+	for _, p := range pairs {
+		rows = append(rows, []string{fmt.Sprintf("%d", p.Count), p.Key})
+	}
+	cliui.RenderTable(w, []cliui.Column{
+		{Name: "count", MaxWidth: 6, AlignRight: true},
+		{Name: "value", MaxWidth: 72},
+	}, rows)
 }
 
 func viewUsage(w io.Writer, fs *flag.FlagSet) {
