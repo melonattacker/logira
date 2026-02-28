@@ -54,6 +54,17 @@ cd logira_vX.Y.Z_linux-<arch>
 sudo ./install-local.sh
 ```
 
+After reinstall / upgrade:
+
+- First install: no extra step is usually needed (`install.sh` runs `systemctl enable --now`).
+- Reinstall/upgrade over an existing install: restart `logirad` to ensure the new binary is running.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart logirad.service
+sudo systemctl status logirad.service --no-pager
+```
+
 ### from source
 
 Build:
