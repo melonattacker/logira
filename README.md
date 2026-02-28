@@ -1,17 +1,24 @@
 # logira
 
-**Runtime security for AI agents.**
+**Runtime monitoring for agentic workflows.**
 
-`logira` is a Linux-only CLI that records what an AI agent actually did while it ran:
-the processes it executed, files it touched, and network activity it initiated.
-Each run is auto-saved locally so you can review it later (`view`), search it (`query`), and understand detections (`explain`).
+`logira` is an observe-only Linux CLI auditor that records runtime `exec`, `file`, and `net` events via eBPF. It is useful for AI agent workflows and general automation, with per-run local storage for auditability, post-run review, search, and detection triage.
 
-## What is this for?
+## What is logira?
 
-- You want an audit trail when running agents with permissive modes like `codex --yolo` or `claude --dangerously-skip-permissions`.
-- You want to review or share "what happened" after an agent run, without relying on the agent's own narrative.
-- You want to debug surprising changes by looking at the timeline of exec/file/net activity.
-- You want lightweight, observe-only runtime monitoring during local development and testing.
+- eBPF-based runtime collection of process execution, file activity, and network activity.
+- cgroup v2 run-scoped tracking so events can be attributed to a single audited run.
+- Per-run local storage in JSONL + SQLite for timeline review and fast querying.
+- Built-in default detection rules plus optional custom YAML rules.
+- Observe-only design: logira records and detects; it does not enforce or block.
+
+## Why logira?
+
+- Audit what an AI agent actually executed, changed, and contacted (for example `codex --yolo` or `claude --dangerously-skip-permissions` runs).
+- Keep a trustworthy execution trail independent of an agent's textual narrative.
+- Detect risky behavior patterns such as credentials access, destructive commands, persistence changes, and suspicious network egress.
+- Review and share forensic evidence after a run using structured event history and detections.
+- Add lightweight runtime monitoring to local automation or CI tasks without changing workload behavior.
 
 ## Default Detections
 
