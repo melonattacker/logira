@@ -147,7 +147,7 @@ EOF
 
   local tmp_unit
   tmp_unit="$(mktemp)"
-  trap 'rm -f "$tmp_unit"' EXIT
+  trap 'if [ -n "${tmp_unit:-}" ] && [ -e "${tmp_unit:-}" ]; then rm -f -- "$tmp_unit"; fi' EXIT
 
   sed \
     -e "s|^[[:space:]]*ExecStart=.*$|ExecStart=${esc_prefix_bin}/logirad|g" \

@@ -153,7 +153,7 @@ main() {
 
   local tmp
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  trap 'if [ -n "${tmp:-}" ] && [ -d "${tmp:-}" ]; then rm -rf -- "$tmp"; fi' EXIT
 
   echo "$PROG: repo=$repo tag=$resolved_tag arch=$arch" >&2
   echo "$PROG: downloading $tar_name" >&2
