@@ -135,7 +135,9 @@ func QueryCommand(ctx context.Context, args []string) error {
 		runStartTS int64
 	)
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
-		defer sqlite.Close()
+		defer func() {
+			_ = sqlite.Close()
+		}()
 		if rr, err := sqlite.GetRunRow(runID); err == nil {
 			runStartTS = rr.StartTS
 		}
@@ -150,7 +152,7 @@ func QueryCommand(ctx context.Context, args []string) error {
 	} else {
 		allEvents, rerr := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
 		if rerr != nil {
-			return fmt.Errorf("open sqlite: %v; read events.jsonl: %w", err, rerr)
+			return fmt.Errorf("open sqlite: %w; read events.jsonl: %w", err, rerr)
 		}
 		meta, _ := runs.ReadMeta(runDir)
 		runStartTS = meta.StartTS
@@ -173,7 +175,7 @@ func QueryCommand(ctx context.Context, args []string) error {
 
 func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartTS int64, tsMode cliui.TSMode, all bool, clr cliui.Colorizer) error {
 	if len(evs) == 0 {
-		fmt.Fprintln(os.Stdout, "(no events)")
+		_, _ = fmt.Fprintln(os.Stdout, "(no events)")
 		return nil
 	}
 
@@ -374,23 +376,23 @@ func parseDest(s string) (ip string, port int, err error) {
 
 func queryUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s query: search events in a run\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s query [flags]\n", prog)
-	fmt.Fprintf(w, "  %s query [last|<run-id>] [flags]\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s query: search events in a run\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s query [flags]\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s query [last|<run-id>] [flags]\n\n", prog)
 
-	fmt.Fprintln(w, "Notes:")
-	fmt.Fprintln(w, "  --run defaults to 'last'.")
-	fmt.Fprintln(w, "  --since uses Go duration syntax (e.g. 10m, 24h, -10s).")
-	fmt.Fprintln(w, "  --dest accepts ip or ip:port (e.g. 93.184.216.34:443).")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Notes:")
+	_, _ = fmt.Fprintln(w, "  --run defaults to 'last'.")
+	_, _ = fmt.Fprintln(w, "  --since uses Go duration syntax (e.g. 10m, 24h, -10s).")
+	_, _ = fmt.Fprintln(w, "  --dest accepts ip or ip:port (e.g. 93.184.216.34:443).")
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s query last --type net --limit 20\n", prog)
-	fmt.Fprintf(w, "  %s query --type detection --severity high\n", prog)
-	fmt.Fprintf(w, "  %s query --related-to-detections --type net\n", prog)
-	fmt.Fprintf(w, "  %s query --json --run last --contains curl\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s query last --type net --limit 20\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s query --type detection --severity high\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s query --related-to-detections --type net\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s query --json --run last --contains curl\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }

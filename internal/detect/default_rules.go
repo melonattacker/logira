@@ -226,7 +226,7 @@ var allowedFileOps = map[string]struct{}{
 func compilePathRegex(pattern, home string) (*regexp.Regexp, error) {
 	s := strings.TrimSpace(pattern)
 	if s == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // empty path_regex means no regex filter.
 	}
 	homeReplacement := regexp.QuoteMeta("$HOME")
 	if strings.TrimSpace(home) != "" {

@@ -15,7 +15,7 @@ type JSONLWriter struct {
 }
 
 func NewJSONLWriter(path string) (*JSONLWriter, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // logira writes per-run audit logs to configured paths.
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}

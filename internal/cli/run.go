@@ -91,7 +91,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	var customRulesYAML []byte
 	var customRulesPath string
 	if rp := strings.TrimSpace(rulesPath); rp != "" {
-		b, err := os.ReadFile(rp)
+		b, err := os.ReadFile(rp) //nolint:gosec // --rules intentionally reads a user-specified rules file.
 		if err != nil {
 			return fmt.Errorf("read --rules file %q: %w", rp, err)
 		}
@@ -125,7 +125,9 @@ func RunCommand(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("connect logirad (%s): %w", cliSock, err)
 	}
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	startReq := ipc.StartRunRequest{
 		RunID:      runID,
@@ -166,7 +168,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	}
 	helperArgs = append(helperArgs, cmdArgs...)
 
-	cmd := exec.CommandContext(ctx, self, helperArgs...)
+	cmd := exec.CommandContext(ctx, self, helperArgs...) //nolint:gosec // helper exec wraps the audited user command under logira's cgroup.
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -205,7 +207,7 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	if stopErr != nil {
 		if waitErr != nil {
-			return fmt.Errorf("%w (also failed to finalize run: %v)", waitErr, stopErr)
+			return fmt.Errorf("%w (also failed to finalize run: %w)", waitErr, stopErr)
 		}
 		return fmt.Errorf("finalize run: %w", stopErr)
 	}
@@ -262,24 +264,24 @@ func isUnknownSessionErr(err error) bool {
 
 func runUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s run: run a command under audit (auto-saves a run)\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s run [flags] -- <agent command...>\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s run: run a command under audit (auto-saves a run)\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s run [flags] -- <agent command...>\n\n", prog)
 
-	fmt.Fprintln(w, "Notes:")
-	fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
-	fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
-	fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
-	fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
-	fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Notes:")
+	_, _ = fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
+	_, _ = fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
+	_, _ = fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
+	_, _ = fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
+	_, _ = fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
-	fmt.Fprintf(w, "  %s run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'\n", prog)
-	fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
 

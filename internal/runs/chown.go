@@ -66,7 +66,7 @@ func bestEffortChownTree(root string, uid, gid int) error {
 		// Ignore per-file chown errors. Root should normally succeed, but we
 		// prefer usability over failing the whole run.
 		// Use Lchown so symlinks cannot be abused to chown arbitrary targets.
-		_ = os.Lchown(p, uid, gid)
+		_ = os.Lchown(p, uid, gid) //nolint:gosec // Lchown intentionally avoids following symlinks during best-effort ownership repair.
 		return nil
 	})
 	if walkErr != nil && !errors.Is(walkErr, os.ErrNotExist) {

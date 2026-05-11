@@ -59,7 +59,9 @@ func TestStore_SQLiteAndJSONL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sqlite.Close()
+	defer func() {
+		_ = sqlite.Close()
+	}()
 
 	evs, err := sqlite.Query(QueryOptions{RunID: runID, Type: TypeFile, Path: "a.txt"})
 	if err != nil {

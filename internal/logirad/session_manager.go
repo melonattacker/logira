@@ -250,7 +250,7 @@ func (m *SessionManager) hasSession(sessionID string) bool {
 
 func cgroupHasProcs(cgroupPath string) (bool, error) {
 	p := filepath.Join(strings.TrimSpace(cgroupPath), "cgroup.procs")
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) //nolint:gosec // cgroup path is created and tracked by logirad for the active session.
 	if err != nil {
 		return false, err
 	}

@@ -22,7 +22,7 @@ func OpenSQLite(path string) (*SQLite, error) {
 	}
 	// Some environments restrict SQLite creating new files under $HOME, but allow
 	// opening an existing file. Pre-create the DB file to avoid SQLITE_CANTOPEN.
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // SQLite DB path is under the resolved logira run directory.
 	if err != nil {
 		return nil, fmt.Errorf("precreate sqlite db %s: %w", path, err)
 	}

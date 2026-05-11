@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/melonattacker/logira/internal/ipc"
@@ -23,7 +22,6 @@ type Server struct {
 
 	cfg ServerConfig
 
-	mu       sync.Mutex
 	sessions *SessionManager
 
 	ln *net.UnixListener
@@ -44,7 +42,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.sockPath = ipc.DefaultSockPath
 	}
 	_ = os.Remove(s.sockPath)
-	if err := os.MkdirAll(filepath.Dir(s.sockPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.sockPath), 0o755); err != nil { //nolint:gosec // daemon socket directory must be reachable by unprivileged clients.
 		return err
 	}
 
@@ -54,7 +52,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return err
 	}
 	s.ln = ln
-	_ = os.Chmod(s.sockPath, 0o666)
+	_ = os.Chmod(s.sockPath, 0o666) //nolint:gosec // peer credentials enforce access; clients need write access to the Unix socket.
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -66,7 +64,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		c, err := ln.AcceptUnix()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
-				return nil
+				return nil //nolint:nilerr // listener closure is the normal shutdown path.
 			}
 			select {
 			case errCh <- err:
@@ -79,7 +77,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
-	defer c.Close()
+	defer func() {
+		_ = c.Close()
+	}()
 
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
 	cred, err := ipc.GetPeerCred(c)

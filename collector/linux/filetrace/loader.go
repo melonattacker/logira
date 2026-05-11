@@ -106,7 +106,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	for _, a := range attach {
 		prog, ok := coll.Programs[a.prog]
 		if !ok {
-			rdr.Close()
+			_ = rdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("file program %s not found", a.prog)
 		}
@@ -115,7 +115,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 			for _, l := range links {
 				_ = l.Close()
 			}
-			rdr.Close()
+			_ = rdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("attach tracepoint %s/%s: %w", a.group, a.name, err)
 		}

@@ -81,7 +81,9 @@ func ViewCommand(ctx context.Context, args []string) error {
 	const topN = 5
 
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
-		defer sqlite.Close()
+		defer func() {
+			_ = sqlite.Close()
+		}()
 
 		if runRow, err := sqlite.GetRunRow(runID); err == nil {
 			if runStartTS == 0 {
@@ -127,7 +129,7 @@ func ViewCommand(ctx context.Context, args []string) error {
 	} else {
 		all, rerr := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
 		if rerr != nil {
-			return fmt.Errorf("open sqlite: %v; read events.jsonl: %w", err, rerr)
+			return fmt.Errorf("open sqlite: %w; read events.jsonl: %w", err, rerr)
 		}
 		all = storage.Filter(all, storage.QueryOptions{RunID: runID})
 		for _, ev := range all {
@@ -157,24 +159,24 @@ func ViewCommand(ctx context.Context, args []string) error {
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s\n", runID)
-	fmt.Fprintf(os.Stdout, "  command:  %s\n", cliui.Truncate(command, 96))
-	fmt.Fprintf(os.Stdout, "  tool:     %s\n", tool)
-	fmt.Fprintf(os.Stdout, "  duration: %s\n", dur)
-	fmt.Fprintf(os.Stdout, "  window:   %s .. %s\n\n", cliui.FormatAbsShort(runStartTS), cliui.FormatAbsShort(runEndTS))
+	stdoutf("Run %s\n", runID)
+	stdoutf("  command:  %s\n", cliui.Truncate(command, 96))
+	stdoutf("  tool:     %s\n", tool)
+	stdoutf("  duration: %s\n", dur)
+	stdoutf("  window:   %s .. %s\n\n", cliui.FormatAbsShort(runStartTS), cliui.FormatAbsShort(runEndTS))
 
 	detTotal := sevCounts["info"] + sevCounts["low"] + sevCounts["medium"] + sevCounts["high"]
 	execCount := eventCounts[storage.TypeExec]
 	fileCount := eventCounts[storage.TypeFile]
 	netCount := eventCounts[storage.TypeNet]
-	fmt.Fprintf(os.Stdout, "Events       exec=%d  file=%d  net=%d\n", execCount, fileCount, netCount)
-	fmt.Fprintf(os.Stdout, "Detections   %d total  (info=%d low=%d med=%d high=%d)\n\n",
+	stdoutf("Events       exec=%d  file=%d  net=%d\n", execCount, fileCount, netCount)
+	stdoutf("Detections   %d total  (info=%d low=%d med=%d high=%d)\n\n",
 		detTotal, sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"],
 	)
 
-	fmt.Fprintln(os.Stdout, "Top detections (grouped)")
+	stdoutln("Top detections (grouped)")
 	if len(groups) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 	} else {
 		rows := make([][]string, 0, len(groups))
 		for _, g := range groups {
@@ -211,9 +213,9 @@ func ViewCommand(ctx context.Context, args []string) error {
 	renderTopSection(os.Stdout, "Top file paths", topPaths)
 	renderTopSection(os.Stdout, "Top destinations", topDest)
 
-	fmt.Fprintln(os.Stdout, "\nHints:")
-	fmt.Fprintf(os.Stdout, "- %s explain %s --show-related\n", progName(), runID)
-	fmt.Fprintf(os.Stdout, "- %s query %s --type net --limit 20\n", progName(), runID)
+	stdoutln("\nHints:")
+	stdoutf("- %s explain %s --show-related\n", progName(), runID)
+	stdoutf("- %s query %s --type net --limit 20\n", progName(), runID)
 	return nil
 }
 
@@ -229,7 +231,9 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 	)
 
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
-		defer sqlite.Close()
+		defer func() {
+			_ = sqlite.Close()
+		}()
 
 		timeline, err = sqlite.Query(storage.QueryOptions{RunID: runID, Limit: 500})
 		if err != nil {
@@ -247,7 +251,7 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 	} else {
 		all, rerr := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
 		if rerr != nil {
-			return fmt.Errorf("open sqlite: %v; read events.jsonl: %w", err, rerr)
+			return fmt.Errorf("open sqlite: %w; read events.jsonl: %w", err, rerr)
 		}
 		all = storage.Filter(all, storage.QueryOptions{RunID: runID})
 		timeline = all
@@ -298,49 +302,49 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 		return enc.Encode(out)
 	}
 
-	fmt.Fprintf(os.Stdout, "Run: %s\n", runID)
+	stdoutf("Run: %s\n", runID)
 	if meta.StartTS > 0 {
-		fmt.Fprintf(os.Stdout, "Start: %s\n", time.Unix(0, meta.StartTS).UTC().Format(time.RFC3339))
+		stdoutf("Start: %s\n", time.Unix(0, meta.StartTS).UTC().Format(time.RFC3339))
 	}
 	if meta.EndTS > 0 {
-		fmt.Fprintf(os.Stdout, "End:   %s\n", time.Unix(0, meta.EndTS).UTC().Format(time.RFC3339))
+		stdoutf("End:   %s\n", time.Unix(0, meta.EndTS).UTC().Format(time.RFC3339))
 	}
 	if strings.TrimSpace(meta.Command) != "" {
-		fmt.Fprintf(os.Stdout, "Cmd:   %s\n", meta.Command)
+		stdoutf("Cmd:   %s\n", meta.Command)
 	}
-	fmt.Fprintf(os.Stdout, "Suspicious: %d\n", meta.SuspiciousCount)
+	stdoutf("Suspicious: %d\n", meta.SuspiciousCount)
 
-	fmt.Fprintf(os.Stdout, "\nTimeline:\n")
+	stdoutf("\nTimeline:\n")
 	for _, ev := range timeline {
 		ts := time.Unix(0, ev.TS).UTC().Format(time.RFC3339Nano)
 		switch ev.Type {
 		case storage.TypeExec:
 			d, _ := parseExecDetail(ev.DataJSON)
-			fmt.Fprintf(os.Stdout, "%s exec pid=%d ppid=%d %s argv=%v\n", ts, ev.PID, ev.PPID, d.Filename, d.Argv)
+			stdoutf("%s exec pid=%d ppid=%d %s argv=%v\n", ts, ev.PID, ev.PPID, d.Filename, d.Argv)
 		case storage.TypeFile:
 			d, _ := parseFileDetail(ev.DataJSON)
-			fmt.Fprintf(os.Stdout, "%s file pid=%d op=%s path=%s\n", ts, ev.PID, d.Op, d.Path)
+			stdoutf("%s file pid=%d op=%s path=%s\n", ts, ev.PID, d.Op, d.Path)
 		case storage.TypeNet:
 			d, _ := parseNetDetail(ev.DataJSON)
-			fmt.Fprintf(os.Stdout, "%s net  pid=%d op=%s dst=%s:%d bytes=%d\n", ts, ev.PID, d.Op, d.DstIP, d.DstPort, d.Bytes)
+			stdoutf("%s net  pid=%d op=%s dst=%s:%d bytes=%d\n", ts, ev.PID, d.Op, d.DstIP, d.DstPort, d.Bytes)
 		case storage.TypeDetection:
 			var det storage.Detection
 			_ = json.Unmarshal(ev.DataJSON, &det)
-			fmt.Fprintf(os.Stdout, "%s DETECTION %s sev=%s related_seq=%d msg=%s\n", ts, det.RuleID, det.Severity, det.RelatedEventSeq, det.Message)
+			stdoutf("%s DETECTION %s sev=%s related_seq=%d msg=%s\n", ts, det.RuleID, det.Severity, det.RelatedEventSeq, det.Message)
 		default:
-			fmt.Fprintf(os.Stdout, "%s %s %s\n", ts, ev.Type, ev.Summary)
+			stdoutf("%s %s %s\n", ts, ev.Type, ev.Summary)
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\nDetections:\n")
+	stdoutf("\nDetections:\n")
 	if len(dets) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 	} else {
 		for _, ev := range dets {
 			ts := time.Unix(0, ev.TS).UTC().Format(time.RFC3339Nano)
 			var det storage.Detection
 			_ = json.Unmarshal(ev.DataJSON, &det)
-			fmt.Fprintf(os.Stdout, "%s %s sev=%s related_seq=%d %s\n", ts, det.RuleID, det.Severity, det.RelatedEventSeq, det.Message)
+			stdoutf("%s %s sev=%s related_seq=%d %s\n", ts, det.RuleID, det.Severity, det.RelatedEventSeq, det.Message)
 		}
 	}
 
@@ -355,7 +359,7 @@ func renderTopSection(w io.Writer, title string, pairs []storage.TopPair) {
 	if len(pairs) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "\n%s (%d)\n", title, len(pairs))
+	_, _ = fmt.Fprintf(w, "\n%s (%d)\n", title, len(pairs))
 	rows := make([][]string, 0, len(pairs))
 	for _, p := range pairs {
 		rows = append(rows, []string{fmt.Sprintf("%d", p.Count), p.Key})
@@ -368,18 +372,18 @@ func renderTopSection(w io.Writer, title string, pairs []storage.TopPair) {
 
 func viewUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s view: view a run summary\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s view [flags] [last|<run-id>]\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s view: view a run summary\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s view [flags] [last|<run-id>]\n\n", prog)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s view\n", prog)
-	fmt.Fprintf(w, "  %s view last --limit 5\n", prog)
-	fmt.Fprintf(w, "  %s view --ts both --no-color last\n", prog)
-	fmt.Fprintf(w, "  %s view --raw last\n", prog)
-	fmt.Fprintf(w, "  %s view --json last\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s view\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s view last --limit 5\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s view --ts both --no-color last\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s view --raw last\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s view --json last\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
 
@@ -395,13 +399,13 @@ func severityRank(ev storage.Event) int {
 }
 
 func printTopPairs(title string, ps []storage.TopPair) {
-	fmt.Fprintf(os.Stdout, "\n%s:\n", title)
+	stdoutf("\n%s:\n", title)
 	if len(ps) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 		return
 	}
 	for _, p := range ps {
-		fmt.Fprintf(os.Stdout, "  %5d  %s\n", p.Count, p.Key)
+		stdoutf("  %5d  %s\n", p.Count, p.Key)
 	}
 }
 
@@ -410,7 +414,9 @@ func computeFileOps(db *sql.DB, runID string, n int) ([]storage.TopPair, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	counts := map[string]int{}
 	for rows.Next() {

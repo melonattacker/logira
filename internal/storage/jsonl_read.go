@@ -10,11 +10,13 @@ import (
 )
 
 func ReadJSONL(path string) ([]Event, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // logira reads run files from its configured run directory.
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	s := bufio.NewScanner(f)
 	s.Buffer(make([]byte, 64*1024), 8*1024*1024)

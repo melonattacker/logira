@@ -59,8 +59,11 @@ func TestEngine_Evaluate_R2(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	p := filepath.Join(dir, "x.sh")
-	if err := os.WriteFile(p, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+	if err := os.WriteFile(p, []byte("#!/bin/sh\necho hi\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.Chmod(p, 0o755); err != nil { //nolint:gosec // executable bit is the behavior under test.
+		t.Fatalf("Chmod: %v", err)
 	}
 
 	fileDetail, _ := json.Marshal(model.FileDetail{Op: "create", Path: p})
@@ -71,7 +74,7 @@ func TestEngine_Evaluate_R2(t *testing.T) {
 
 	// Non-executable should not trigger R2.
 	p2 := filepath.Join(dir, "data.txt")
-	if err := os.WriteFile(p2, []byte("hi\n"), 0o644); err != nil {
+	if err := os.WriteFile(p2, []byte("hi\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	fileDetail2, _ := json.Marshal(model.FileDetail{Op: "modify", Path: p2})

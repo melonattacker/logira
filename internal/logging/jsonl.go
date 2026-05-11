@@ -25,7 +25,7 @@ func NewJSONLWriter(path string) (*JSONLWriter, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("empty log path")
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // caller controls the audit log destination.
 	if err != nil {
 		return nil, fmt.Errorf("open log: %w", err)
 	}
@@ -106,7 +106,7 @@ func CollectLogFiles(path string) ([]string, error) {
 func ReadEvents(paths []string) ([]collector.Event, error) {
 	out := make([]collector.Event, 0, 1024)
 	for _, path := range paths {
-		f, err := os.Open(path)
+		f, err := os.Open(path) //nolint:gosec // caller supplies log files to import/read.
 		if err != nil {
 			return nil, fmt.Errorf("open %s: %w", path, err)
 		}

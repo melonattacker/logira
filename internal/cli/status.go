@@ -83,7 +83,9 @@ func StatusCommand(ctx context.Context, args []string) error {
 		out.Ready = false
 		return writeStatus(out, asJSON)
 	}
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 	out.Daemon.Running = true
 	out.Daemon.SocketAccess = "ok"
 
@@ -132,20 +134,20 @@ func decideReady(out statusJSON, st ipc.StatusResponse, req statusRequired) (boo
 
 func statusUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s status: check if logira is ready on this machine\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s status [flags]\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s status: check if logira is ready on this machine\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s status [flags]\n\n", prog)
 
-	fmt.Fprintln(w, "Notes:")
-	fmt.Fprintln(w, "  Ready=YES requires: logirad reachable, logirad running as root, cgroup v2 enabled, and required probes enabled in logirad.")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Notes:")
+	_, _ = fmt.Fprintln(w, "  Ready=YES requires: logirad reachable, logirad running as root, cgroup v2 enabled, and required probes enabled in logirad.")
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s status\n", prog)
-	fmt.Fprintf(w, "  %s status --json\n", prog)
-	fmt.Fprintf(w, "  %s status --net=false\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s status\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s status --json\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s status --net=false\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
 
@@ -183,22 +185,22 @@ func writeStatus(s statusJSON, asJSON bool) error {
 		readyWord = "YES"
 	}
 
-	fmt.Fprintf(os.Stdout, "Daemon:        %s\n", daemonLine)
+	stdoutf("Daemon:        %s\n", daemonLine)
 	if strings.TrimSpace(s.Kernel.Release) != "" {
-		fmt.Fprintf(os.Stdout, "Kernel:        %s\n", s.Kernel.Release)
+		stdoutf("Kernel:        %s\n", s.Kernel.Release)
 	}
 	if s.CgroupV2.Enabled {
-		fmt.Fprintf(os.Stdout, "cgroup v2:     enabled\n")
+		stdoutf("cgroup v2:     enabled\n")
 	} else {
-		fmt.Fprintf(os.Stdout, "cgroup v2:     disabled\n")
+		stdoutf("cgroup v2:     disabled\n")
 	}
 	if s.Daemon.StatusOK {
-		fmt.Fprintf(os.Stdout, "BPF probes:    exec %s  file %s  net %s\n", probeWord(s.BPFProbes.Exec), probeWord(s.BPFProbes.File), probeWord(s.BPFProbes.Net))
+		stdoutf("BPF probes:    exec %s  file %s  net %s\n", probeWord(s.BPFProbes.Exec), probeWord(s.BPFProbes.File), probeWord(s.BPFProbes.Net))
 	} else {
-		fmt.Fprintf(os.Stdout, "BPF probes:    exec UNKNOWN  file UNKNOWN  net UNKNOWN\n")
+		stdoutf("BPF probes:    exec UNKNOWN  file UNKNOWN  net UNKNOWN\n")
 	}
-	fmt.Fprintf(os.Stdout, "Socket access: %s\n", sockAccess)
-	fmt.Fprintf(os.Stdout, "Ready:         %s\n", readyWord)
+	stdoutf("Socket access: %s\n", sockAccess)
+	stdoutf("Ready:         %s\n", readyWord)
 	return nil
 }
 

@@ -57,12 +57,12 @@ func ExecInCgroupCommand(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	return syscall.Exec(target, cmdArgs, os.Environ())
+	return syscall.Exec(target, cmdArgs, os.Environ()) //nolint:gosec // logira run intentionally execs the audited user command.
 }
 
 func joinCgroupSelf(ctx context.Context, cgroupPath, sessionID string) error {
 	p := filepath.Join(cgroupPath, "cgroup.procs")
-	if err := os.WriteFile(p, []byte(strconv.Itoa(os.Getpid())), 0o644); err == nil {
+	if err := os.WriteFile(p, []byte(strconv.Itoa(os.Getpid())), 0o644); err == nil { //nolint:gosec // cgroup.procs permissions are controlled by cgroupfs.
 		return nil
 	}
 
@@ -71,12 +71,14 @@ func joinCgroupSelf(ctx context.Context, cgroupPath, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.Close()
+	}()
 	if err := c.AttachPID(ctx, sessionID, os.Getpid()); err != nil {
 		return err
 	}
 	// Best-effort re-check.
-	if err := os.WriteFile(p, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil && !errors.Is(err, os.ErrPermission) {
+	if err := os.WriteFile(p, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil && !errors.Is(err, os.ErrPermission) { //nolint:gosec // cgroup.procs permissions are controlled by cgroupfs.
 		return err
 	}
 	return nil

@@ -57,7 +57,11 @@ func realMain() int {
 		fmt.Fprintf(os.Stderr, "collector start: %v\n", err)
 		return 1
 	}
-	defer col.Stop(context.Background())
+	defer func() {
+		if err := col.Stop(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "collector stop: %v\n", err)
+		}
+	}()
 
 	mgr := logirad.NewSessionManager(col)
 	go func() {

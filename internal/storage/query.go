@@ -116,7 +116,7 @@ func (s *SQLite) queryObserved(opts QueryOptions, limit int) ([]Event, error) {
 		args = append(args, opts.DstPort)
 	}
 
-	q := fmt.Sprintf(
+	q := fmt.Sprintf( //nolint:gosec // WHERE clauses are built only from fixed fragments; values stay parameterized.
 		`SELECT run_id, seq, ts, type, pid, ppid, uid, summary, data_json FROM events WHERE %s ORDER BY ts, seq LIMIT ?`,
 		strings.Join(where, " AND "),
 	)
@@ -126,7 +126,9 @@ func (s *SQLite) queryObserved(opts QueryOptions, limit int) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	out := make([]Event, 0, 1024)
 	for rows.Next() {
@@ -194,7 +196,7 @@ func (s *SQLite) queryObservedRelatedToDetections(opts QueryOptions, limit int) 
 		args = append(args, opts.DstPort)
 	}
 
-	q := fmt.Sprintf(
+	q := fmt.Sprintf( //nolint:gosec // WHERE clauses are built only from fixed fragments; values stay parameterized.
 		`SELECT run_id, seq, ts, type, pid, ppid, uid, summary, data_json FROM events WHERE %s ORDER BY ts, seq LIMIT ?`,
 		strings.Join(where, " AND "),
 	)
@@ -204,7 +206,9 @@ func (s *SQLite) queryObservedRelatedToDetections(opts QueryOptions, limit int) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	out := make([]Event, 0, 1024)
 	for rows.Next() {
@@ -268,7 +272,7 @@ func (s *SQLite) queryDetections(opts QueryOptions, limit int) ([]Event, error) 
 		args = append(args, opts.Severity)
 	}
 
-	q := fmt.Sprintf(
+	q := fmt.Sprintf( //nolint:gosec // WHERE clauses are built only from fixed fragments; values stay parameterized.
 		`SELECT run_id, seq, ts, rule_id, severity, message, related_seq FROM detections WHERE %s ORDER BY ts, seq LIMIT ?`,
 		strings.Join(where, " AND "),
 	)
@@ -278,7 +282,9 @@ func (s *SQLite) queryDetections(opts QueryOptions, limit int) ([]Event, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	out := make([]Event, 0, 128)
 	for rows.Next() {
@@ -344,7 +350,9 @@ func topPairs(db *sql.DB, q string, runID string, n int) ([]TopPair, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	out := make([]TopPair, 0, n)
 	for rows.Next() {
 		var k sql.NullString

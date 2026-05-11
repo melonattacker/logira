@@ -77,11 +77,7 @@ func EnsureHome() (string, error) {
 
 		// Prefer ~/.logira (spec), but fall back if the environment restricts
 		// SQLite file creation/locking there.
-		cands, err := homeCandidates(home)
-		if err != nil {
-			ensureErr = err
-			return
-		}
+		cands := homeCandidates(home)
 		for _, c := range cands {
 			if c == "" {
 				continue
@@ -96,7 +92,7 @@ func EnsureHome() (string, error) {
 	return ensureHome, ensureErr
 }
 
-func homeCandidates(primary string) ([]string, error) {
+func homeCandidates(primary string) []string {
 	baseHome := ""
 	if filepath.Base(primary) == ".logira" {
 		baseHome = filepath.Dir(primary)
@@ -104,7 +100,7 @@ func homeCandidates(primary string) ([]string, error) {
 	if baseHome == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return []string{primary}, nil
+			return []string{primary}
 		}
 		baseHome = home
 	}
@@ -126,7 +122,7 @@ func homeCandidates(primary string) ([]string, error) {
 		alt,
 		filepath.Join(stateHome, "logira"),
 		tmp,
-	}, nil
+	}
 }
 
 func ensureHomeDir(home string) (string, error) {
@@ -149,7 +145,7 @@ func sqliteWorks(home string) bool {
 	// for dot-prefixed DB files.
 	p := filepath.Join(home, "sqlite_check.sqlite")
 	_ = os.Remove(p)
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // path is an internal SQLite probe under the selected logira home.
 	if err != nil {
 		return false
 	}

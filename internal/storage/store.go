@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -167,19 +168,5 @@ func (s *Store) SuspiciousCount() int {
 func NowUnixNanos() int64 { return time.Now().UTC().UnixNano() }
 
 func joinErrors(errs []error) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	var out error
-	for _, e := range errs {
-		if e == nil {
-			continue
-		}
-		if out == nil {
-			out = e
-		} else {
-			out = fmt.Errorf("%v; %w", out, e)
-		}
-	}
-	return out
+	return errors.Join(errs...)
 }

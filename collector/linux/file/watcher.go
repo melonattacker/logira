@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,7 +91,7 @@ func (w *Watcher) Start(ctx context.Context) (<-chan collector.Event, error) {
 			w.mu.Lock()
 			w.started = false
 			w.mu.Unlock()
-			return nil, fmt.Errorf("fanotify failed: %v; inotify failed: %w", fanErr, inoErr)
+			return nil, fmt.Errorf("fanotify failed: %w; inotify failed: %w", fanErr, inoErr)
 		}
 		w.mode = "inotify"
 	} else {
@@ -194,7 +195,7 @@ func (w *Watcher) runFanotify(ctx context.Context) {
 
 		offset := 0
 		for offset+fanMetaSize <= n {
-			meta := (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[offset]))
+			meta := (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[offset])) //nolint:gosec // fanotify metadata is provided as a kernel byte buffer.
 			if int(meta.Event_len) < fanMetaSize {
 				break
 			}
@@ -280,7 +281,7 @@ func (w *Watcher) runInotify(ctx context.Context) {
 
 		offset := 0
 		for offset+unix.SizeofInotifyEvent <= n {
-			raw := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
+			raw := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset])) //nolint:gosec // inotify metadata is provided as a kernel byte buffer.
 			offset += unix.SizeofInotifyEvent
 
 			name := ""
@@ -352,11 +353,13 @@ func (w *Watcher) makeFileEvent(op, path string, pid int) collector.Event {
 }
 
 func hashFile(path string, maxBytes int64) (hash string, size int64, truncated bool, err error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // logira intentionally hashes watched user-selected paths.
 	if err != nil {
 		return "", 0, false, err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	st, err := f.Stat()
 	if err == nil {
@@ -366,7 +369,7 @@ func hashFile(path string, maxBytes int64) (hash string, size int64, truncated b
 	h := sha256.New()
 	if maxBytes > 0 {
 		_, err = io.CopyN(h, f, maxBytes)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return "", size, false, err
 		}
 		if size > maxBytes {
