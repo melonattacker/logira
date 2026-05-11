@@ -11,17 +11,19 @@ import (
 )
 
 func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) //nolint:gosec // compatibility copy reads a user-requested logira output path.
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	defer func() {
+		_ = in.Close()
+	}()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // compatibility copy writes to a user-requested destination.
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return err
 	}
 	return out.Close()
@@ -32,7 +34,7 @@ func waitForCgroupEmpty(ctx context.Context, cgroupPath string) error {
 	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()
 	for {
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) //nolint:gosec // cgroup path is created by logira/logirad for this run.
 		if err == nil {
 			// cgroup.procs contains one PID per line.
 			if strings.TrimSpace(string(b)) == "" {

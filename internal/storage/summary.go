@@ -46,7 +46,9 @@ func (s *SQLite) CountEventsByType(runID string) (map[EventType]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	out := map[EventType]int{}
 	for rows.Next() {
 		var typ string
@@ -64,7 +66,9 @@ func (s *SQLite) CountDetectionsBySeverity(runID string) (map[string]int, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	out := map[string]int{}
 	for rows.Next() {
 		var sev string
@@ -99,7 +103,9 @@ func (s *SQLite) ListGroupedDetections(runID string, limit int) ([]GroupedDetect
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	out := make([]GroupedDetection, 0, limit)
 	for rows.Next() {
@@ -134,7 +140,9 @@ func (s *SQLite) ListDetectionsWithRelated(runID string, limit int, offset int) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	out := make([]DetectionWithRelated, 0, limit)
 	for rows.Next() {

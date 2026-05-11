@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -83,12 +84,14 @@ func ExplainCommand(ctx context.Context, args []string) error {
 
 	clr := cliui.NewColorizer(colorMode, noColor, os.Stdout)
 	var (
-		runStartTS int64 = meta.StartTS
-		runEndTS   int64 = meta.EndTS
-		command          = strings.TrimSpace(meta.Command)
+		runStartTS = meta.StartTS
+		runEndTS   = meta.EndTS
+		command    = strings.TrimSpace(meta.Command)
 	)
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
-		defer sqlite.Close()
+		defer func() {
+			_ = sqlite.Close()
+		}()
 		if row, err := sqlite.GetRunRow(runID); err == nil {
 			if runStartTS == 0 {
 				runStartTS = row.StartTS
@@ -138,11 +141,11 @@ func explainGroupedSQLite(runID string, sqlite *storage.SQLite, runStartTS, runE
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s  dur=%s  detections=%d (info=%d low=%d med=%d high=%d)  cmd=%q\n\n",
+	stdoutf("Run %s  dur=%s  detections=%d (info=%d low=%d med=%d high=%d)  cmd=%q\n\n",
 		runID, dur, total, sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"], cliui.Truncate(command, 80))
-	fmt.Fprintln(os.Stdout, "Detections (grouped)")
+	stdoutln("Detections (grouped)")
 	if len(groups) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 	} else {
 		rows := make([][]string, 0, len(groups))
 		for _, g := range groups {
@@ -179,10 +182,10 @@ func explainGroupedSQLite(runID string, sqlite *storage.SQLite, runStartTS, runE
 		}, rows)
 	}
 
-	fmt.Fprintln(os.Stdout, "\nHints:")
-	fmt.Fprintf(os.Stdout, "- %s explain %s --show-related\n", progName(), runID)
-	fmt.Fprintf(os.Stdout, "- %s explain %s --drill <seq>\n", progName(), runID)
-	fmt.Fprintf(os.Stdout, "- %s explain %s --raw\n", progName(), runID)
+	stdoutln("\nHints:")
+	stdoutf("- %s explain %s --show-related\n", progName(), runID)
+	stdoutf("- %s explain %s --drill <seq>\n", progName(), runID)
+	stdoutf("- %s explain %s --raw\n", progName(), runID)
 	return nil
 }
 
@@ -200,10 +203,10 @@ func explainShowRelatedSQLite(runID string, sqlite *storage.SQLite, runStartTS, 
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s  dur=%s  detections=%d  cmd=%q\n\n", runID, dur, total, cliui.Truncate(command, 80))
-	fmt.Fprintln(os.Stdout, "Detections (with related evidence)")
+	stdoutf("Run %s  dur=%s  detections=%d  cmd=%q\n\n", runID, dur, total, cliui.Truncate(command, 80))
+	stdoutln("Detections (with related evidence)")
 	if len(rows) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 		return nil
 	}
 
@@ -261,31 +264,31 @@ func explainShowRelatedSQLite(runID string, sqlite *storage.SQLite, runStartTS, 
 func explainDrillSQLite(runID string, seq int64, sqlite *storage.SQLite, runStartTS int64) error {
 	det, err := sqlite.GetDetectionBySeq(runID, seq)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("detection seq=%d not found in run %s", seq, runID)
 		}
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "Run %s\n", runID)
-	fmt.Fprintf(os.Stdout, "Detection\n")
-	fmt.Fprintf(os.Stdout, "  seq=%d ts=%s sev=%s rule=%s related_seq=%d\n", det.Seq, cliui.FormatAbsFull(det.TS), det.Severity, det.RuleID, det.RelatedSeq)
-	fmt.Fprintf(os.Stdout, "  message=%s\n\n", det.Message)
+	stdoutf("Run %s\n", runID)
+	stdoutln("Detection")
+	stdoutf("  seq=%d ts=%s sev=%s rule=%s related_seq=%d\n", det.Seq, cliui.FormatAbsFull(det.TS), det.Severity, det.RuleID, det.RelatedSeq)
+	stdoutf("  message=%s\n\n", det.Message)
 	if det.RelatedSeq <= 0 {
-		fmt.Fprintln(os.Stdout, "Related event: (none)")
+		stdoutln("Related event: (none)")
 		return nil
 	}
 	ev, err := sqlite.GetEventBySeq(runID, det.RelatedSeq)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			fmt.Fprintf(os.Stdout, "Related event seq=%d not found\n", det.RelatedSeq)
+		if errors.Is(err, sql.ErrNoRows) {
+			stdoutf("Related event seq=%d not found\n", det.RelatedSeq)
 			return nil
 		}
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "Related event\n")
-	fmt.Fprintf(os.Stdout, "  seq=%d ts=%s rel=%s type=%s pid=%d\n", ev.Seq, cliui.FormatAbsFull(ev.TS), cliui.FormatRel(ev.TS, runStartTS), ev.Type, ev.PID)
-	fmt.Fprintf(os.Stdout, "  summary=%s\n", ev.Summary)
-	fmt.Fprintf(os.Stdout, "  evidence=%s\n", evidenceFromEvent(ev, 100000))
+	stdoutln("Related event")
+	stdoutf("  seq=%d ts=%s rel=%s type=%s pid=%d\n", ev.Seq, cliui.FormatAbsFull(ev.TS), cliui.FormatRel(ev.TS, runStartTS), ev.Type, ev.PID)
+	stdoutf("  summary=%s\n", ev.Summary)
+	stdoutf("  evidence=%s\n", evidenceFromEvent(ev, 100000))
 	return nil
 }
 
@@ -302,12 +305,12 @@ func explainGroupedFallback(runID string, allEvents []storage.Event, runStartTS,
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s  dur=%s  detections=%d (info=%d low=%d med=%d high=%d)  cmd=%q\n\n",
+	stdoutf("Run %s  dur=%s  detections=%d (info=%d low=%d med=%d high=%d)  cmd=%q\n\n",
 		runID, dur, total, sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"], cliui.Truncate(command, 80))
-	fmt.Fprintln(os.Stdout, "Detections (grouped)")
+	stdoutln("Detections (grouped)")
 	groups := groupDetectionsFromEvents(dets, limit)
 	if len(groups) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 		return nil
 	}
 	bySeq := map[int64]storage.Event{}
@@ -363,10 +366,10 @@ func explainShowRelatedFallback(runID string, allEvents []storage.Event, runStar
 	if runStartTS > 0 && runEndTS > 0 && runEndTS >= runStartTS {
 		dur = cliui.FormatDuration(runStartTS, runEndTS)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s  dur=%s  detections=%d  cmd=%q\n\n", runID, dur, len(dets), cliui.Truncate(command, 80))
-	fmt.Fprintln(os.Stdout, "Detections (with related evidence)")
+	stdoutf("Run %s  dur=%s  detections=%d  cmd=%q\n\n", runID, dur, len(dets), cliui.Truncate(command, 80))
+	stdoutln("Detections (with related evidence)")
 	if len(dets) == 0 {
-		fmt.Fprintln(os.Stdout, "(none)")
+		stdoutln("(none)")
 		return nil
 	}
 	maxEvidence := 56
@@ -438,32 +441,34 @@ func explainDrillFallback(runID string, seq int64, allEvents []storage.Event, ru
 	if err := json.Unmarshal(detEv.DataJSON, &det); err != nil {
 		return fmt.Errorf("decode detection seq=%d: %w", seq, err)
 	}
-	fmt.Fprintf(os.Stdout, "Run %s\n", runID)
-	fmt.Fprintf(os.Stdout, "Detection\n")
-	fmt.Fprintf(os.Stdout, "  seq=%d ts=%s sev=%s rule=%s related_seq=%d\n", detEv.Seq, cliui.FormatAbsFull(detEv.TS), det.Severity, det.RuleID, det.RelatedEventSeq)
-	fmt.Fprintf(os.Stdout, "  message=%s\n\n", det.Message)
+	stdoutf("Run %s\n", runID)
+	stdoutln("Detection")
+	stdoutf("  seq=%d ts=%s sev=%s rule=%s related_seq=%d\n", detEv.Seq, cliui.FormatAbsFull(detEv.TS), det.Severity, det.RuleID, det.RelatedEventSeq)
+	stdoutf("  message=%s\n\n", det.Message)
 	if det.RelatedEventSeq <= 0 {
-		fmt.Fprintln(os.Stdout, "Related event: (none)")
+		stdoutln("Related event: (none)")
 		return nil
 	}
 	for _, ev := range allEvents {
 		if ev.Seq != det.RelatedEventSeq {
 			continue
 		}
-		fmt.Fprintf(os.Stdout, "Related event\n")
-		fmt.Fprintf(os.Stdout, "  seq=%d ts=%s rel=%s type=%s pid=%d\n", ev.Seq, cliui.FormatAbsFull(ev.TS), cliui.FormatRel(ev.TS, runStartTS), ev.Type, ev.PID)
-		fmt.Fprintf(os.Stdout, "  summary=%s\n", ev.Summary)
-		fmt.Fprintf(os.Stdout, "  evidence=%s\n", evidenceFromEvent(ev, 100000))
+		stdoutln("Related event")
+		stdoutf("  seq=%d ts=%s rel=%s type=%s pid=%d\n", ev.Seq, cliui.FormatAbsFull(ev.TS), cliui.FormatRel(ev.TS, runStartTS), ev.Type, ev.PID)
+		stdoutf("  summary=%s\n", ev.Summary)
+		stdoutf("  evidence=%s\n", evidenceFromEvent(ev, 100000))
 		return nil
 	}
-	fmt.Fprintf(os.Stdout, "Related event seq=%d not found\n", det.RelatedEventSeq)
+	stdoutf("Related event seq=%d not found\n", det.RelatedEventSeq)
 	return nil
 }
 
 func explainLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 	var dets []storage.Event
 	if sqlite, err := storage.OpenSQLiteReadOnly(filepath.Join(runDir, "index.sqlite")); err == nil {
-		defer sqlite.Close()
+		defer func() {
+			_ = sqlite.Close()
+		}()
 		dets, err = sqlite.Query(storage.QueryOptions{RunID: runID, Type: storage.TypeDetection, Limit: 2000})
 		if err != nil {
 			return err
@@ -471,7 +476,7 @@ func explainLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 	} else {
 		all, rerr := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
 		if rerr != nil {
-			return fmt.Errorf("open sqlite: %v; read events.jsonl: %w", err, rerr)
+			return fmt.Errorf("open sqlite: %w; read events.jsonl: %w", err, rerr)
 		}
 		dets = storage.Filter(all, storage.QueryOptions{RunID: runID, Type: storage.TypeDetection, Limit: 2000})
 	}
@@ -512,24 +517,32 @@ func explainLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 		})
 	}
 
-	fmt.Fprintln(os.Stdout, text)
+	stdoutln(text)
 	return nil
+}
+
+func stdoutf(format string, args ...any) {
+	_, _ = fmt.Fprintf(os.Stdout, format, args...)
+}
+
+func stdoutln(args ...any) {
+	_, _ = fmt.Fprintln(os.Stdout, args...)
 }
 
 func explainUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s explain: explain detections for a run\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s explain [flags] [last|<run-id>]\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s explain: explain detections for a run\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s explain [flags] [last|<run-id>]\n\n", prog)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s explain last\n", prog)
-	fmt.Fprintf(w, "  %s explain last --show-related\n", prog)
-	fmt.Fprintf(w, "  %s explain last --drill 35\n", prog)
-	fmt.Fprintf(w, "  %s explain last --raw\n", prog)
-	fmt.Fprintf(w, "  %s explain --json last\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s explain last\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s explain last --show-related\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s explain last --drill 35\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s explain last --raw\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s explain --json last\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
 

@@ -124,7 +124,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 			for _, l := range links {
 				_ = l.Close()
 			}
-			rdr.Close()
+			_ = rdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("net program %s not found", a.prog)
 		}
@@ -133,7 +133,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 			for _, l := range links {
 				_ = l.Close()
 			}
-			rdr.Close()
+			_ = rdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("attach tracepoint %s/%s: %w", a.group, a.name, err)
 		}
@@ -265,7 +265,7 @@ func ipv4String(ip uint32) string {
 	if ip == 0 {
 		return ""
 	}
-	b := []byte{byte(ip), byte(ip >> 8), byte(ip >> 16), byte(ip >> 24)}
+	b := []byte{byte(ip), byte(ip >> 8), byte(ip >> 16), byte(ip >> 24)} //nolint:gosec // bytes are intentionally truncated from each IPv4 octet.
 	return net.IPv4(b[0], b[1], b[2], b[3]).String()
 }
 

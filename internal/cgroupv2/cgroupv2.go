@@ -31,7 +31,7 @@ func Create(runID string) (*Cgroup, error) {
 		return nil, fmt.Errorf("empty runID")
 	}
 	dir := filepath.Join(MountPoint, "logira", runID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // cgroupfs directories must be searchable for delegated process joins.
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	return &Cgroup{Path: dir}, nil
@@ -57,17 +57,17 @@ func CreateDelegated(runID string, uid, gid int, sessionID string) (*Cgroup, err
 	_ = strings.TrimSpace(runID)
 
 	dir := filepath.Join(MountPoint, "logira", strconv.Itoa(uid), sessionID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // cgroupfs delegation requires user-visible cgroup directories.
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 
 	// Best-effort delegation: chown the directory and key control files.
 	_ = os.Chown(dir, uid, gid)
-	_ = os.Chmod(dir, 0o755)
+	_ = os.Chmod(dir, 0o755) //nolint:gosec // delegated users need search access to their cgroup directory.
 	for _, f := range []string{"cgroup.procs", "cgroup.threads"} {
 		p := filepath.Join(dir, f)
 		_ = os.Chown(p, uid, gid)
-		_ = os.Chmod(p, 0o664)
+		_ = os.Chmod(p, 0o664) //nolint:gosec // cgroup.procs must be writable by the delegated user's group.
 	}
 	return &Cgroup{Path: dir}, nil
 }
@@ -77,7 +77,7 @@ func (cg *Cgroup) JoinPID(pid int) error {
 		return fmt.Errorf("invalid pid %d", pid)
 	}
 	p := filepath.Join(cg.Path, "cgroup.procs")
-	return os.WriteFile(p, []byte(strconv.Itoa(pid)), 0o644)
+	return os.WriteFile(p, []byte(strconv.Itoa(pid)), 0o644) //nolint:gosec // cgroup.procs permissions are controlled by cgroupfs.
 }
 
 // JoinSelf moves the current process into cg by writing its pid to cgroup.procs.

@@ -24,7 +24,7 @@ func GetPeerCred(conn *net.UnixConn) (PeerCred, error) {
 	var ucred *unix.Ucred
 	var serr error
 	if err := rc.Control(func(fd uintptr) {
-		u, e := unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+		u, e := unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED) //nolint:gosec // fd is supplied by net.UnixConn.SyscallConn.
 		if e != nil {
 			serr = e
 			return

@@ -86,7 +86,7 @@ func RunsCommand(ctx context.Context, args []string) error {
 	}
 
 	if len(rows) == 0 {
-		fmt.Fprintln(os.Stdout, "(no runs)")
+		_, _ = fmt.Fprintln(os.Stdout, "(no runs)")
 		return nil
 	}
 
@@ -128,14 +128,14 @@ func RunsCommand(ctx context.Context, args []string) error {
 
 func runsUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	fmt.Fprintf(w, "%s runs: list saved runs\n\n", prog)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintf(w, "  %s runs [--json] [--no-color] [--color auto|always|never]\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s runs: list saved runs\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintf(w, "  %s runs [--json] [--no-color] [--color auto|always|never]\n\n", prog)
 
-	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintf(w, "  %s runs\n", prog)
-	fmt.Fprintf(w, "  %s runs --json\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Examples:")
+	_, _ = fmt.Fprintf(w, "  %s runs\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s runs --json\n\n", prog)
 
-	fmt.Fprintln(w, "Flags:")
+	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()
 }
