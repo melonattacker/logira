@@ -63,13 +63,24 @@ func realMain() int {
 	}
 
 	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
+		if code, ok := commandExitCode(err); ok {
+			return code
 		}
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+func commandExitCode(err error) (int, bool) {
+	if errors.Is(err, flag.ErrHelp) {
+		return 0, true
+	}
+	var exitErr *cli.ExitCodeError
+	if errors.As(err, &exitErr) {
+		return exitErr.Code, true
+	}
+	return 0, false
 }
 
 func normalizeSubcommandHelpArgs(args []string) []string {
