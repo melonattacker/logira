@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -50,10 +49,12 @@ func RunCommand(ctx context.Context, args []string) error {
 	var hashMaxBytes int64
 	var waitChildren bool
 	var waitChildrenTimeout time.Duration
+	var summaryModeS string
 
 	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
 	fs.StringVar(&rulesPath, "rules", "", "path to custom detection rules YAML (appended to built-in rules)")
+	fs.StringVar(&summaryModeS, "summary", string(runSummaryModeAuto), "end-of-run summary: auto|off|detections")
 	fs.Var(&watch, "watch", "deprecated compatibility flag; file event retention is rule-driven")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
@@ -65,6 +66,10 @@ func RunCommand(ctx context.Context, args []string) error {
 	fs.DurationVar(&waitChildrenTimeout, "wait-children-timeout", 5*time.Second, "max wait for cgroup to drain")
 
 	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+	summaryMode, err := parseRunSummaryMode(summaryModeS)
+	if err != nil {
 		return err
 	}
 
@@ -190,20 +195,9 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	stopErr := stopRunWithRetry(client, startResp.SessionID, exitCode)
 
-	// Best-effort: read meta for suspicious_count.
-	sus := 0
-	if b, err := os.ReadFile(runs.MetaPath(startResp.RunDir)); err == nil {
-		var m runs.Meta
-		if json.Unmarshal(b, &m) == nil {
-			sus = m.SuspiciousCount
-		}
-	}
-
 	if strings.TrimSpace(logPath) != "" {
 		_ = copyFile(filepath.Join(startResp.RunDir, "events.jsonl"), logPath)
 	}
-
-	fmt.Fprintf(os.Stderr, "run_id=%s dir=%s suspicious=%d\n", runID, startResp.RunDir, sus)
 
 	if stopErr != nil {
 		if waitErr != nil {
@@ -212,8 +206,12 @@ func RunCommand(ctx context.Context, args []string) error {
 		return fmt.Errorf("finalize run: %w", stopErr)
 	}
 
+	if err := renderRunEndSummaryFromRun(os.Stderr, summaryMode, runID, startResp.RunDir, exitCode); err != nil {
+		fmt.Fprintf(os.Stderr, "[logira] run %s summary unavailable: %v\n", runID, err)
+	}
+
 	if waitErr != nil {
-		return waitErr
+		return &ExitCodeError{Code: exitCode}
 	}
 	return nil
 }
@@ -272,12 +270,14 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	_, _ = fmt.Fprintln(w, "  Requires logirad (root daemon) to be running.")
 	_, _ = fmt.Fprintln(w, "  Use '--' to separate logira flags from the audited command.")
 	_, _ = fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
+	_, _ = fmt.Fprintln(w, "  End-of-run summaries are written to stderr; use --summary off to suppress them.")
 	_, _ = fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
 	_, _ = fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
 	_, _ = fmt.Fprintln(w)
 
 	_, _ = fmt.Fprintln(w, "Examples:")
 	_, _ = fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s run --summary detections -- claude\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 
