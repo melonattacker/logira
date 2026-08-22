@@ -12,10 +12,44 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type traceOpenState struct {
-	Flags    uint32
-	Dirfd    int32
-	Filename [256]int8
+type traceFdPathKey struct {
+	CgroupId uint64
+	Tgid     uint32
+	Fd       int32
+}
+
+type traceFdPathValue struct {
+	Dirfd int32
+	Flags uint32
+	Path  [256]int8
+}
+
+type traceFileStageCounters struct {
+	Enters                uint64
+	Exits                 uint64
+	Emitted               uint64
+	RingDrops             uint64
+	MissingEnters         uint64
+	FailedExits           uint64
+	PendingUpdateFailures uint64
+	UnattributedWrites    uint64
+}
+
+type tracePendingFileOp struct {
+	CgroupId  uint64
+	EnterTsNs uint64
+	Kind      uint32
+	Syscall   uint32
+	Tgid      uint32
+	Tid       uint32
+	Uid       uint32
+	Flags     uint32
+	Fd        int32
+	Dirfd     int32
+	Dirfd2    int32
+	Pad1      uint32
+	Path      [256]int8
+	Path2     [256]int8
 }
 
 // loadTrace returns the embedded CollectionSpec for trace.
@@ -59,18 +93,47 @@ type traceSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type traceProgramSpecs struct {
-	TraceEnterOpenat  *ebpf.ProgramSpec `ebpf:"trace_enter_openat"`
-	TraceEnterOpenat2 *ebpf.ProgramSpec `ebpf:"trace_enter_openat2"`
-	TraceExitOpenat   *ebpf.ProgramSpec `ebpf:"trace_exit_openat"`
-	TraceExitOpenat2  *ebpf.ProgramSpec `ebpf:"trace_exit_openat2"`
+	TraceEnterChdir     *ebpf.ProgramSpec `ebpf:"trace_enter_chdir"`
+	TraceEnterClose     *ebpf.ProgramSpec `ebpf:"trace_enter_close"`
+	TraceEnterFchdir    *ebpf.ProgramSpec `ebpf:"trace_enter_fchdir"`
+	TraceEnterFtruncate *ebpf.ProgramSpec `ebpf:"trace_enter_ftruncate"`
+	TraceEnterOpenat    *ebpf.ProgramSpec `ebpf:"trace_enter_openat"`
+	TraceEnterOpenat2   *ebpf.ProgramSpec `ebpf:"trace_enter_openat2"`
+	TraceEnterPwrite64  *ebpf.ProgramSpec `ebpf:"trace_enter_pwrite64"`
+	TraceEnterRename    *ebpf.ProgramSpec `ebpf:"trace_enter_rename"`
+	TraceEnterRenameat  *ebpf.ProgramSpec `ebpf:"trace_enter_renameat"`
+	TraceEnterRenameat2 *ebpf.ProgramSpec `ebpf:"trace_enter_renameat2"`
+	TraceEnterTruncate  *ebpf.ProgramSpec `ebpf:"trace_enter_truncate"`
+	TraceEnterUnlink    *ebpf.ProgramSpec `ebpf:"trace_enter_unlink"`
+	TraceEnterUnlinkat  *ebpf.ProgramSpec `ebpf:"trace_enter_unlinkat"`
+	TraceEnterWrite     *ebpf.ProgramSpec `ebpf:"trace_enter_write"`
+	TraceEnterWritev    *ebpf.ProgramSpec `ebpf:"trace_enter_writev"`
+	TraceExitChdir      *ebpf.ProgramSpec `ebpf:"trace_exit_chdir"`
+	TraceExitClose      *ebpf.ProgramSpec `ebpf:"trace_exit_close"`
+	TraceExitFchdir     *ebpf.ProgramSpec `ebpf:"trace_exit_fchdir"`
+	TraceExitFtruncate  *ebpf.ProgramSpec `ebpf:"trace_exit_ftruncate"`
+	TraceExitOpenat     *ebpf.ProgramSpec `ebpf:"trace_exit_openat"`
+	TraceExitOpenat2    *ebpf.ProgramSpec `ebpf:"trace_exit_openat2"`
+	TraceExitPwrite64   *ebpf.ProgramSpec `ebpf:"trace_exit_pwrite64"`
+	TraceExitRename     *ebpf.ProgramSpec `ebpf:"trace_exit_rename"`
+	TraceExitRenameat   *ebpf.ProgramSpec `ebpf:"trace_exit_renameat"`
+	TraceExitRenameat2  *ebpf.ProgramSpec `ebpf:"trace_exit_renameat2"`
+	TraceExitTruncate   *ebpf.ProgramSpec `ebpf:"trace_exit_truncate"`
+	TraceExitUnlink     *ebpf.ProgramSpec `ebpf:"trace_exit_unlink"`
+	TraceExitUnlinkat   *ebpf.ProgramSpec `ebpf:"trace_exit_unlinkat"`
+	TraceExitWrite      *ebpf.ProgramSpec `ebpf:"trace_exit_write"`
+	TraceExitWritev     *ebpf.ProgramSpec `ebpf:"trace_exit_writev"`
 }
 
 // traceMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type traceMapSpecs struct {
-	Events      *ebpf.MapSpec `ebpf:"events"`
-	PendingOpen *ebpf.MapSpec `ebpf:"pending_open"`
+	Events         *ebpf.MapSpec `ebpf:"events"`
+	FdPaths        *ebpf.MapSpec `ebpf:"fd_paths"`
+	PendingFileOps *ebpf.MapSpec `ebpf:"pending_file_ops"`
+	PendingScratch *ebpf.MapSpec `ebpf:"pending_scratch"`
+	StageCounters  *ebpf.MapSpec `ebpf:"stage_counters"`
 }
 
 // traceObjects contains all objects after they have been loaded into the kernel.
@@ -92,14 +155,20 @@ func (o *traceObjects) Close() error {
 //
 // It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
 type traceMaps struct {
-	Events      *ebpf.Map `ebpf:"events"`
-	PendingOpen *ebpf.Map `ebpf:"pending_open"`
+	Events         *ebpf.Map `ebpf:"events"`
+	FdPaths        *ebpf.Map `ebpf:"fd_paths"`
+	PendingFileOps *ebpf.Map `ebpf:"pending_file_ops"`
+	PendingScratch *ebpf.Map `ebpf:"pending_scratch"`
+	StageCounters  *ebpf.Map `ebpf:"stage_counters"`
 }
 
 func (m *traceMaps) Close() error {
 	return _TraceClose(
 		m.Events,
-		m.PendingOpen,
+		m.FdPaths,
+		m.PendingFileOps,
+		m.PendingScratch,
+		m.StageCounters,
 	)
 }
 
@@ -107,18 +176,70 @@ func (m *traceMaps) Close() error {
 //
 // It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
 type tracePrograms struct {
-	TraceEnterOpenat  *ebpf.Program `ebpf:"trace_enter_openat"`
-	TraceEnterOpenat2 *ebpf.Program `ebpf:"trace_enter_openat2"`
-	TraceExitOpenat   *ebpf.Program `ebpf:"trace_exit_openat"`
-	TraceExitOpenat2  *ebpf.Program `ebpf:"trace_exit_openat2"`
+	TraceEnterChdir     *ebpf.Program `ebpf:"trace_enter_chdir"`
+	TraceEnterClose     *ebpf.Program `ebpf:"trace_enter_close"`
+	TraceEnterFchdir    *ebpf.Program `ebpf:"trace_enter_fchdir"`
+	TraceEnterFtruncate *ebpf.Program `ebpf:"trace_enter_ftruncate"`
+	TraceEnterOpenat    *ebpf.Program `ebpf:"trace_enter_openat"`
+	TraceEnterOpenat2   *ebpf.Program `ebpf:"trace_enter_openat2"`
+	TraceEnterPwrite64  *ebpf.Program `ebpf:"trace_enter_pwrite64"`
+	TraceEnterRename    *ebpf.Program `ebpf:"trace_enter_rename"`
+	TraceEnterRenameat  *ebpf.Program `ebpf:"trace_enter_renameat"`
+	TraceEnterRenameat2 *ebpf.Program `ebpf:"trace_enter_renameat2"`
+	TraceEnterTruncate  *ebpf.Program `ebpf:"trace_enter_truncate"`
+	TraceEnterUnlink    *ebpf.Program `ebpf:"trace_enter_unlink"`
+	TraceEnterUnlinkat  *ebpf.Program `ebpf:"trace_enter_unlinkat"`
+	TraceEnterWrite     *ebpf.Program `ebpf:"trace_enter_write"`
+	TraceEnterWritev    *ebpf.Program `ebpf:"trace_enter_writev"`
+	TraceExitChdir      *ebpf.Program `ebpf:"trace_exit_chdir"`
+	TraceExitClose      *ebpf.Program `ebpf:"trace_exit_close"`
+	TraceExitFchdir     *ebpf.Program `ebpf:"trace_exit_fchdir"`
+	TraceExitFtruncate  *ebpf.Program `ebpf:"trace_exit_ftruncate"`
+	TraceExitOpenat     *ebpf.Program `ebpf:"trace_exit_openat"`
+	TraceExitOpenat2    *ebpf.Program `ebpf:"trace_exit_openat2"`
+	TraceExitPwrite64   *ebpf.Program `ebpf:"trace_exit_pwrite64"`
+	TraceExitRename     *ebpf.Program `ebpf:"trace_exit_rename"`
+	TraceExitRenameat   *ebpf.Program `ebpf:"trace_exit_renameat"`
+	TraceExitRenameat2  *ebpf.Program `ebpf:"trace_exit_renameat2"`
+	TraceExitTruncate   *ebpf.Program `ebpf:"trace_exit_truncate"`
+	TraceExitUnlink     *ebpf.Program `ebpf:"trace_exit_unlink"`
+	TraceExitUnlinkat   *ebpf.Program `ebpf:"trace_exit_unlinkat"`
+	TraceExitWrite      *ebpf.Program `ebpf:"trace_exit_write"`
+	TraceExitWritev     *ebpf.Program `ebpf:"trace_exit_writev"`
 }
 
 func (p *tracePrograms) Close() error {
 	return _TraceClose(
+		p.TraceEnterChdir,
+		p.TraceEnterClose,
+		p.TraceEnterFchdir,
+		p.TraceEnterFtruncate,
 		p.TraceEnterOpenat,
 		p.TraceEnterOpenat2,
+		p.TraceEnterPwrite64,
+		p.TraceEnterRename,
+		p.TraceEnterRenameat,
+		p.TraceEnterRenameat2,
+		p.TraceEnterTruncate,
+		p.TraceEnterUnlink,
+		p.TraceEnterUnlinkat,
+		p.TraceEnterWrite,
+		p.TraceEnterWritev,
+		p.TraceExitChdir,
+		p.TraceExitClose,
+		p.TraceExitFchdir,
+		p.TraceExitFtruncate,
 		p.TraceExitOpenat,
 		p.TraceExitOpenat2,
+		p.TraceExitPwrite64,
+		p.TraceExitRename,
+		p.TraceExitRenameat,
+		p.TraceExitRenameat2,
+		p.TraceExitTruncate,
+		p.TraceExitUnlink,
+		p.TraceExitUnlinkat,
+		p.TraceExitWrite,
+		p.TraceExitWritev,
 	)
 }
 

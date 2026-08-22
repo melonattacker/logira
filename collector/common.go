@@ -18,3 +18,4 @@ type TargetSetter = common.TargetSetter
 type ChildWaiter = common.ChildWaiter
 type DropCounts = common.DropCounts
 type LossTracker = common.LossTracker
+type FileCorrelationFinalizer = common.FileCorrelationFinalizer

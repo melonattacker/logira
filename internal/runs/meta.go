@@ -22,10 +22,11 @@ type KnownLoss struct {
 	CollectorForwardDropped uint64 `json:"collector_forward_dropped,omitempty"`
 	SessionQueueDropped     uint64 `json:"session_queue_dropped,omitempty"`
 	PersistenceFailures     uint64 `json:"persistence_failures,omitempty"`
+	CorrelationFailures     uint64 `json:"correlation_failures,omitempty"`
 }
 
 func (l KnownLoss) Total() uint64 {
-	return l.CollectorForwardDropped + l.SessionQueueDropped + l.PersistenceFailures
+	return l.CollectorForwardDropped + l.SessionQueueDropped + l.PersistenceFailures + l.CorrelationFailures
 }
 
 type KernelCoverage struct {

@@ -216,11 +216,13 @@ func validateFileWhen(w *FileWhen) error {
 }
 
 var allowedFileOps = map[string]struct{}{
-	"create": {},
-	"modify": {},
-	"delete": {},
-	"open":   {},
-	"read":   {},
+	"create":         {},
+	"create_or_open": {},
+	"modify":         {},
+	"rename":         {},
+	"delete":         {},
+	"open":           {},
+	"read":           {},
 }
 
 func compilePathRegex(pattern, home string) (*regexp.Regexp, error) {

@@ -201,12 +201,43 @@ func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.E
 		}
 		ev = lc.enrichExecCWD(ev)
 	}
+	if ev.Type == collector.EventTypeFile {
+		var detail struct {
+			CgroupID    uint64 `json:"cgroup_id"`
+			Correlation string `json:"correlation"`
+		}
+		if json.Unmarshal(ev.Detail, &detail) == nil && detail.CgroupID != 0 && detail.Correlation == "incomplete" {
+			lc.recordFileCorrelationFailure(detail.CgroupID, 1)
+		}
+	}
 
 	select {
 	case out <- ev:
 	default:
 		lc.recordForwardDrop(ev)
 	}
+}
+
+func (lc *LinuxCollector) FinalizeFileCorrelation(cgroupID uint64) uint64 {
+	if lc.fileTracer == nil || cgroupID == 0 {
+		return 0
+	}
+	count := lc.fileTracer.FinalizeCgroup(cgroupID)
+	lc.recordFileCorrelationFailure(cgroupID, count)
+	return count
+}
+
+func (lc *LinuxCollector) recordFileCorrelationFailure(cgroupID, count uint64) {
+	if cgroupID == 0 || count == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	c, ok := lc.lossTargets[cgroupID]
+	if ok {
+		c.FileCorrelationFailures += count
+		lc.lossTargets[cgroupID] = c
+	}
+	lc.lossMu.Unlock()
 }
 
 func (lc *LinuxCollector) RegisterLossTarget(cgroupID uint64) {

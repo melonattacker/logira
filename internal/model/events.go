@@ -38,11 +38,20 @@ type ProcessDetail struct {
 
 type FileDetail struct {
 	Op                string `json:"op"`
+	Syscall           string `json:"syscall,omitempty"`
+	Correlation       string `json:"correlation,omitempty"`
 	Path              string `json:"path"`
+	Path2             string `json:"path2,omitempty"`
 	RawPath           string `json:"raw_path,omitempty"`
+	RawPath2          string `json:"raw_path2,omitempty"`
 	PathResolution    string `json:"path_resolution,omitempty"`
+	PathResolution2   string `json:"path_resolution2,omitempty"`
 	FD                *int   `json:"fd,omitempty"`
 	DirFD             *int   `json:"dirfd,omitempty"`
+	DirFD2            *int   `json:"dirfd2,omitempty"`
+	Flags             uint32 `json:"flags,omitempty"`
+	ReturnValue       int64  `json:"return_value,omitempty"`
+	Bytes             int64  `json:"bytes,omitempty"`
 	PID               int    `json:"pid,omitempty"`
 	TID               int    `json:"tid,omitempty"`
 	TGID              int    `json:"tgid,omitempty"`

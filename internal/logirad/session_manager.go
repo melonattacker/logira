@@ -273,6 +273,9 @@ func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUI
 
 func (m *SessionManager) finalizeSession(s *session, endTS int64) {
 	var forward collector.DropCounts
+	if finalizer, ok := m.collector.(collector.FileCorrelationFinalizer); ok {
+		_ = finalizer.FinalizeFileCorrelation(s.cgroupID)
+	}
 	if tracker, ok := m.collector.(collector.LossTracker); ok {
 		forward = tracker.SnapshotAndUnregisterLossTarget(s.cgroupID)
 	}

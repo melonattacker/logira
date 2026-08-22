@@ -92,7 +92,9 @@ Supported fields:
 Allowed `op_in` values:
 
 - `create`
+- `create_or_open`
 - `modify`
+- `rename`
 - `delete`
 - `open`
 - `read`
@@ -179,4 +181,3 @@ Examples of invalid rules that `logira run --rules` will reject:
 
 - Quick trial rules: [`examples/rules/quickstart.yaml`](../examples/rules/quickstart.yaml)
 - Trial commands and notes: [`examples/rules/README.md`](../examples/rules/README.md)
-

@@ -4,7 +4,10 @@ logira stores one JSON object per line in `events.jsonl` under each run director
 
 `$LOGIRA_HOME/runs/<run-id>/events.jsonl`
 
-File event retention is rule-driven (based on active file detection rules), not path-watch driven.
+For ordinary runs, file event retention is rule-driven (based on active file
+detection rules), not path-watch driven. Agent runs additionally retain
+workspace access and state-changing file observations, including unresolved
+paths and incomplete syscall correlation evidence.
 
 Common fields:
 - `run_id`: run identifier
@@ -91,12 +94,16 @@ moving the identity to the post-exec TID.
   "summary": "file open /home/u/.aws/credentials",
   "data_json": {
     "op": "open",
+    "syscall": "openat",
+    "correlation": "complete",
     "path": "/home/u/.aws/credentials",
     "raw_path": ".aws/credentials",
     "path_resolution": "dirfd",
     "fd": 7,
     "dirfd": 4,
     "pid": 1234,
+    "tid": 1234,
+    "tgid": 1234,
     "ppid": 1200,
     "uid": 1000,
     "cgroup_id": 4567890123
@@ -105,20 +112,36 @@ moving the identity to the post-exec TID.
 ```
 
 `data_json` fields (best-effort):
-- `op`: `create` | `modify` | `delete` | `open`
-- `path`: affected path
+- `op`: `create` | `create_or_open` | `modify` | `rename` | `delete` | `open` | `chdir` | `unknown`
+- `syscall`: the observed syscall (`openat`, `write`, `renameat2`, etc.)
+- `correlation`: `complete` when a bounded enter state was paired with its
+  exit, or `incomplete` when the exit was observed without its enter
+- `path`, `path2`: affected path(s); `path2` is used by rename operations
 - `raw_path`: original relative kernel path, when applicable
-- `path_resolution`: how a relative path was resolved (`dirfd`, `cwd`, or an
-  explicit unresolved/legacy state). The returned `fd` is not used for path
-  resolution because it may be closed and reused before userspace handles the
-  event.
-- `fd`, `dirfd`: returned descriptor and the `openat(2)` directory descriptor,
+- `path_resolution`: how a relative path was resolved (`dirfd`, `cwd`,
+  `task_cwd`, `fd_provenance`, or an explicit unresolved/legacy state).
+  Successful-open FD provenance is run-local and bounded; unresolved dirfds
+  never fall back to CWD.
+- `fd`, `dirfd`, `dirfd2`: returned/operated-on descriptor and directory descriptors,
   when supplied by the kernel tracer
-- `pid`, `ppid`, `uid`: process metadata also recorded inside file detail (best-effort)
+- `pid`, `tid`, `tgid`, `ppid`, `uid`, `kernel_time_ns`: task/process metadata (best-effort)
+- `flags`, `return_value`, `bytes`: syscall result metadata when applicable
 - `cgroup_id`: kernel cgroup id if available
 - `size_before`, `size_after`: bytes (if known; may be absent)
 - `hash_before`, `hash_after`: SHA-256 (best-effort; may be absent)
 - `hash_truncated`: true when hashing was capped by `--hash-max-bytes` (may be absent)
+
+Successful effects are emitted only after syscall exit: open requires
+`ret >= 0`, writes require `ret > 0`, and rename/unlink/truncate require
+`ret == 0`. `O_CREAT|O_EXCL` is `create`; `O_CREAT` without exclusivity is
+`create_or_open`; `O_TRUNC` is `modify`. A write-capable open alone is not
+reported as a modification; successful `write`, `pwrite64`, or `writev`
+provides that evidence.
+
+Version 5 never resolves an unresolved relative path against the run CWD.
+Resolution uses the actual dirfd, live `/proc` metadata, or run-local task CWD
+and successful-open FD provenance. Otherwise the raw path is retained with an
+explicit unresolved state.
 
 ## Net Event (`type=net`)
 
@@ -182,7 +205,8 @@ records make interpretation partial without claiming that the telemetry stream
 was lost.
 
 Process, file, and network coverage each record `availability`, `capture`, and
-known loss split into `collector_forward_dropped`, `session_queue_dropped`, and
-`persistence_failures`. Kernel capture `complete` narrowly means that Logira
+known loss split into `collector_forward_dropped`, `session_queue_dropped`,
+`persistence_failures`, and file `correlation_failures`. Kernel capture
+`complete` narrowly means that Logira
 knows of no loss after the relevant collector boundary. It is not proof that
 the kernel/BPF path was globally lossless.

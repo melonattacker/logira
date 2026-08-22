@@ -131,6 +131,14 @@ func TestKernelCoverageKnownLossAndDisabled(t *testing.T) {
 	}
 }
 
+func TestFileCorrelationFailureMakesCapturePartial(t *testing.T) {
+	s := &session{}
+	coverage := s.kernelCoverage(true, 0, 0, 0, 2)
+	if coverage.Capture != "partial" || coverage.KnownLoss.CorrelationFailures != 2 || coverage.KnownLoss.Total() != 2 {
+		t.Fatalf("coverage=%+v", coverage)
+	}
+}
+
 func TestAgentRetentionIncludesWorkspaceOnly(t *testing.T) {
 	s := &session{meta: runs.Meta{AgentProvider: "codex", CWD: "/workspace/project"}}
 	if !s.retainAgentWorkspaceFile("/workspace/project/src/main.go") {
@@ -138,6 +146,77 @@ func TestAgentRetentionIncludesWorkspaceOnly(t *testing.T) {
 	}
 	if s.retainAgentWorkspaceFile("/workspace/other/secret") {
 		t.Fatal("unexpected path outside workspace retained")
+	}
+}
+
+func TestAgentRetainsStateChangingAndIncompleteFileEvidence(t *testing.T) {
+	s := &session{meta: runs.Meta{AgentProvider: "codex", CWD: "/workspace/project"}}
+	if !s.shouldRetainFile(model.FileDetail{Op: "modify", Path: "unresolved.txt", PathResolution: "unresolved_cwd"}) {
+		t.Fatal("state-changing unresolved event was dropped")
+	}
+	if !s.shouldRetainFile(model.FileDetail{Op: "unknown", Correlation: "incomplete"}) {
+		t.Fatal("correlation uncertainty was dropped")
+	}
+	nonAgent := &session{meta: runs.Meta{CWD: "/workspace/project"}}
+	if nonAgent.shouldRetainFile(model.FileDetail{Op: "modify", Path: "/tmp/no-rule"}) {
+		t.Fatal("default non-agent retention changed")
+	}
+}
+
+func TestVersion5DoesNotUseRunCWDLegacyFallback(t *testing.T) {
+	s := &session{meta: runs.Meta{Version: 5, CWD: "/wrong/run/cwd"}}
+	detail := model.FileDetail{TGID: 1 << 29, TID: 1 << 29}
+	path, resolution := s.resolveFilePath(detail, "relative.txt", nil)
+	if path != "relative.txt" || resolution != "unresolved_cwd" {
+		t.Fatalf("path=%q resolution=%q", path, resolution)
+	}
+}
+
+func TestForkInheritedTaskCWDResolvesAfterProcessExit(t *testing.T) {
+	s := &session{meta: runs.Meta{Version: 5}}
+	s.observeExecContext(collector.Event{PID: 10}, model.ExecDetail{TID: 10, TGID: 10, TaskStartKernelNS: 100, CWD: "/workspace"})
+	s.observeProcessContext(model.ProcessDetail{Kind: "fork", ParentTID: 10, ParentTaskStartKernelNS: 100, ChildTID: 20, TaskStartKernelNS: 200})
+	detail := model.FileDetail{TGID: 1 << 29, TID: 20, TaskStartKernelNS: 200}
+	path, resolution := s.resolveFilePath(detail, "child.txt", nil)
+	if path != "/workspace/child.txt" || resolution != "task_cwd" {
+		t.Fatalf("path=%q resolution=%q", path, resolution)
+	}
+}
+
+func TestWriteUsesSuccessfulOpenFDProvenance(t *testing.T) {
+	s := &session{meta: runs.Meta{Version: 5, AgentProvider: "codex"}}
+	fd, atFDCWD := 7, -100
+	openRaw, _ := json.Marshal(model.FileDetail{Op: "create_or_open", Syscall: "openat", Correlation: "complete", Path: "/tmp/output.txt", FD: &fd, DirFD: &atFDCWD, TGID: 50, TID: 50})
+	if _, ok := s.normalizeFileDetail(collector.Event{PID: 50, Detail: openRaw}); !ok {
+		t.Fatal("open did not normalize")
+	}
+	writeRaw, _ := json.Marshal(model.FileDetail{Op: "modify", Syscall: "write", Correlation: "complete", Path: "output.txt", FD: &fd, DirFD: &atFDCWD, TGID: 50, TID: 50, Bytes: 3})
+	write, ok := s.normalizeFileDetail(collector.Event{PID: 50, Detail: writeRaw})
+	if !ok || write.Path != "/tmp/output.txt" || write.PathResolution != "fd_provenance" {
+		t.Fatalf("write=%+v ok=%v", write, ok)
+	}
+}
+
+func TestRenameResolvesBothDirFDPaths(t *testing.T) {
+	s := &session{meta: runs.Meta{Version: 5}}
+	base := t.TempDir()
+	dir, err := os.Open(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	dirfd := int(dir.Fd())
+	raw, _ := json.Marshal(model.FileDetail{Op: "rename", Syscall: "renameat", Correlation: "complete", Path: "old", Path2: "new", DirFD: &dirfd, DirFD2: &dirfd, TGID: os.Getpid(), TID: os.Getpid()})
+	d, ok := s.normalizeFileDetail(collector.Event{PID: os.Getpid(), Detail: raw})
+	if !ok || d.Path != filepath.Join(base, "old") || d.Path2 != filepath.Join(base, "new") {
+		t.Fatalf("rename=%+v ok=%v", d, ok)
+	}
+}
+
+func TestExtractCgroupIDRoutesFileLifecycleEvent(t *testing.T) {
+	detail, _ := json.Marshal(model.FileDetail{CgroupID: 42, Op: "modify"})
+	if got := extractCgroupID(collector.EventTypeFile, detail); got != 42 {
+		t.Fatalf("cgroup id=%d", got)
 	}
 }
 

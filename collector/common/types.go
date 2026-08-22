@@ -49,9 +49,10 @@ type ChildWaiter interface {
 }
 
 type DropCounts struct {
-	Exec uint64
-	File uint64
-	Net  uint64
+	Exec                    uint64
+	File                    uint64
+	Net                     uint64
+	FileCorrelationFailures uint64
 }
 
 // LossTracker reports userspace forwarding drops for active audited cgroups.
@@ -59,4 +60,10 @@ type DropCounts struct {
 type LossTracker interface {
 	RegisterLossTarget(cgroupID uint64)
 	SnapshotAndUnregisterLossTarget(cgroupID uint64) DropCounts
+}
+
+// FileCorrelationFinalizer clears pending file syscall enters for a drained
+// cgroup and reports the number that had no observed exit.
+type FileCorrelationFinalizer interface {
+	FinalizeFileCorrelation(cgroupID uint64) uint64
 }

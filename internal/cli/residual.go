@@ -363,9 +363,9 @@ func emptyAs(value, fallback string) string {
 
 func renderKernelCoverage(name string, coverage runs.KernelCoverage) {
 	loss := coverage.KnownLoss
-	stdoutf("  %-11s availability=%s capture=%s loss={collector_forward:%d session_queue:%d persistence:%d}\n",
+	stdoutf("  %-11s availability=%s capture=%s loss={collector_forward:%d session_queue:%d persistence:%d correlation:%d}\n",
 		name+":", coverage.Availability, coverage.Capture,
-		loss.CollectorForwardDropped, loss.SessionQueueDropped, loss.PersistenceFailures)
+		loss.CollectorForwardDropped, loss.SessionQueueDropped, loss.PersistenceFailures, loss.CorrelationFailures)
 }
 
 func residualUsage(w io.Writer, fs *flag.FlagSet) {

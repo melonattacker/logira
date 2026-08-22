@@ -327,7 +327,7 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 			stdoutf("%s process kind=%s tid=%d tgid=%d parent_tid=%d child_tid=%d old_pid=%d start_kernel_ns=%d\n", ts, d.Kind, d.TID, d.TGID, d.ParentTID, d.ChildTID, d.OldPID, d.TaskStartKernelNS)
 		case storage.TypeFile:
 			d, _ := parseFileDetail(ev.DataJSON)
-			stdoutf("%s file pid=%d op=%s path=%s\n", ts, ev.PID, d.Op, d.Path)
+			stdoutf("%s file pid=%d tid=%d op=%s syscall=%s correlation=%s path=%s path2=%s\n", ts, ev.PID, d.TID, d.Op, d.Syscall, d.Correlation, d.Path, d.Path2)
 		case storage.TypeNet:
 			d, _ := parseNetDetail(ev.DataJSON)
 			stdoutf("%s net  pid=%d op=%s dst=%s:%d bytes=%d\n", ts, ev.PID, d.Op, d.DstIP, d.DstPort, d.Bytes)
