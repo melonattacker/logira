@@ -29,7 +29,7 @@ struct trace_event_raw_sys_exit {
 
 struct addr_info {
     __u32 ip4;
-    __u16 port;
+    __u16 port_be;
     __u16 family;
 };
 
@@ -55,8 +55,9 @@ struct net_event {
     __u8 proto;
     __u16 _pad1;
     __u32 ip4;
-    __u16 port;
+    __u16 port_be;
     __u16 _pad2;
+    __u32 _pad3;
     __s64 bytes;
 };
 
@@ -104,7 +105,8 @@ static __always_inline int read_sockaddr(const void *addr, __u64 addrlen, struct
             return -1;
         }
         out->ip4 = s4.sin_addr.s_addr;
-        out->port = bpf_ntohs(s4.sin_port);
+        /* Preserve the sockaddr's network-order bytes in the event ABI. */
+        out->port_be = s4.sin_port;
         return 0;
     }
 
@@ -122,13 +124,16 @@ static __always_inline void submit_event(__u32 pid, __u32 uid, __u8 op, struct a
     event->uid = uid;
     event->op = op;
     event->proto = 0;
+    event->_pad1 = 0;
     event->ip4 = 0;
-    event->port = 0;
+    event->port_be = 0;
+    event->_pad2 = 0;
+    event->_pad3 = 0;
     event->bytes = bytes;
 
     if (addr && addr->family == AF_INET) {
         event->ip4 = addr->ip4;
-        event->port = addr->port;
+        event->port_be = addr->port_be;
     }
 
     bpf_ringbuf_submit(event, 0);
@@ -199,7 +204,7 @@ int trace_enter_connect(struct trace_event_raw_sys_enter *ctx) {
     state._pad1 = 0;
     state._pad2 = 0;
     state.addr.ip4 = 0;
-    state.addr.port = 0;
+    state.addr.port_be = 0;
     state.addr.family = 0;
     read_sockaddr((const void *)ctx->args[1], ctx->args[2], &state.addr);
     bpf_map_update_elem(&pending_connect, &tid, &state, BPF_ANY);
@@ -239,7 +244,7 @@ int trace_enter_sendto(struct trace_event_raw_sys_enter *ctx) {
     state._pad1 = 0;
     state._pad2 = 0;
     state.addr.ip4 = 0;
-    state.addr.port = 0;
+    state.addr.port_be = 0;
     state.addr.family = 0;
     read_sockaddr((const void *)ctx->args[4], ctx->args[5], &state.addr);
     bpf_map_update_elem(&pending_io, &tid, &state, BPF_ANY);
@@ -257,7 +262,7 @@ int trace_enter_sendmsg(struct trace_event_raw_sys_enter *ctx) {
     state._pad1 = 0;
     state._pad2 = 0;
     state.addr.ip4 = 0;
-    state.addr.port = 0;
+    state.addr.port_be = 0;
     state.addr.family = 0;
     bpf_map_update_elem(&pending_io, &tid, &state, BPF_ANY);
     return 0;
@@ -274,7 +279,7 @@ int trace_enter_recvfrom(struct trace_event_raw_sys_enter *ctx) {
     state._pad1 = 0;
     state._pad2 = 0;
     state.addr.ip4 = 0;
-    state.addr.port = 0;
+    state.addr.port_be = 0;
     state.addr.family = 0;
     bpf_map_update_elem(&pending_io, &tid, &state, BPF_ANY);
     return 0;
@@ -291,7 +296,7 @@ int trace_enter_recvmsg(struct trace_event_raw_sys_enter *ctx) {
     state._pad1 = 0;
     state._pad2 = 0;
     state.addr.ip4 = 0;
-    state.addr.port = 0;
+    state.addr.port_be = 0;
     state.addr.family = 0;
     bpf_map_update_elem(&pending_io, &tid, &state, BPF_ANY);
     return 0;

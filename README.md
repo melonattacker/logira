@@ -134,6 +134,23 @@ Run Codex CLI:
 ./logira run -- codex --yolo "Update the README to be clearer and add examples."
 ```
 
+Experimental Action Residual capture compares Codex runtime/harness-reported
+actions with independently observed kernel activity. It does not analyze model
+or user intent:
+
+```bash
+./logira run --agent codex -- codex exec --json "Inspect this repository"
+./logira query last --type agent
+./logira view last --raw
+./logira residual last
+```
+
+V0 requires the explicit `codex exec --json` command shape; flags are not
+injected and shell wrappers are not accepted. Residual findings are
+`MATCHED`, `REPORTED_NOT_OBSERVED`, `OBSERVED_NOT_REPORTED`, `BLOCKED`, or
+`UNOBSERVABLE`. Known Logira-side telemetry loss is shown in run coverage and
+prevents absence from being treated as a meaningful mismatch.
+
 Run Claude Code CLI:
 
 ```bash
@@ -173,6 +190,7 @@ Query events:
 - `logira view [last|<run-id>]`: run dashboard (use `--raw` for legacy text)
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
+- `logira residual [last|<run-id>]`: experimental runtime-to-kernel consistency report for agent-enabled runs
 
 Rules:
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)

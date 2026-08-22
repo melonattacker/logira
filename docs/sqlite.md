@@ -42,7 +42,10 @@ CREATE TABLE events(
 );
 ```
 
-`exe`/`path`/`dst_ip`/`dst_port` are extracted columns to accelerate common queries.
+`type` may also be `agent`; agent runtime records use the same event table and
+require no schema migration. `exe`/`path`/`dst_ip`/`dst_port` are extracted
+columns to accelerate common kernel-event queries. Provenance is derived from
+the event type when records are read.
 
 ### `detections`
 

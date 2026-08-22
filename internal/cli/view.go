@@ -327,6 +327,10 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 		case storage.TypeNet:
 			d, _ := parseNetDetail(ev.DataJSON)
 			stdoutf("%s net  pid=%d op=%s dst=%s:%d bytes=%d\n", ts, ev.PID, d.Op, d.DstIP, d.DstPort, d.Bytes)
+		case storage.TypeAgent:
+			var d model.AgentDetail
+			_ = json.Unmarshal(ev.DataJSON, &d)
+			stdoutf("%s agent kind=%s item=%s status=%s command=%q text=%q\n", ts, d.Kind, d.ItemID, d.Status, d.Command, d.Text)
 		case storage.TypeDetection:
 			var det storage.Detection
 			_ = json.Unmarshal(ev.DataJSON, &det)

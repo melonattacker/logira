@@ -63,7 +63,7 @@ func realMain() int {
 		}
 	}()
 
-	mgr := logirad.NewSessionManager(col)
+	mgr := logirad.NewSessionManager(col, logirad.CollectorCapabilities{Exec: enableExec, File: enableFile, Net: enableNet})
 	go func() {
 		for ev := range events {
 			mgr.RouteEvent(ev)

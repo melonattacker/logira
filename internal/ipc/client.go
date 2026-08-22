@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/melonattacker/logira/internal/model"
 )
 
 const DefaultSockPath = "/run/logira.sock"
@@ -123,4 +125,32 @@ func (c *Client) Status(ctx context.Context) (StatusResponse, error) {
 		return StatusResponse{}, fmt.Errorf("unexpected response type %q", resp.Type)
 	}
 	return resp, nil
+}
+
+func appendOneShot(ctx context.Context, req any) error {
+	c, err := Dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	var resp OKResponse
+	if err := c.roundTrip(ctx, req, &resp); err != nil {
+		return err
+	}
+	if strings.TrimSpace(resp.Type) != MsgTypeOK {
+		return fmt.Errorf("unexpected response type %q", resp.Type)
+	}
+	return nil
+}
+
+func AppendAgentEvent(ctx context.Context, sessionID string, detail model.AgentDetail) error {
+	return appendOneShot(ctx, AppendAgentEventRequest{
+		Type: MsgTypeAppendAgentEvent, SessionID: sessionID, Detail: detail,
+	})
+}
+
+func FinishAgentTelemetry(ctx context.Context, sessionID string, stats AgentTelemetryStats) error {
+	return appendOneShot(ctx, FinishAgentTelemetryRequest{
+		Type: MsgTypeFinishAgentTelemetry, SessionID: sessionID, Stats: stats,
+	})
 }

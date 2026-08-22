@@ -30,6 +30,8 @@ type rawFileEvent struct {
 	UID      uint32
 	Flags    uint32
 	FD       int32
+	DirFD    int32
+	Pad1     uint32
 	Filename [maxPathLen]byte
 }
 
@@ -165,9 +167,12 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			continue
 		}
 
+		fd, dirfd := int(raw.FD), int(raw.DirFD)
 		detail := model.FileDetail{
 			Op:       op,
 			Path:     cString(raw.Filename[:]),
+			FD:       &fd,
+			DirFD:    &dirfd,
 			PID:      int(raw.PID),
 			UID:      int(raw.UID),
 			CgroupID: raw.CgroupID,

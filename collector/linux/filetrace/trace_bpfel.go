@@ -14,6 +14,7 @@ import (
 
 type traceOpenState struct {
 	Flags    uint32
+	Dirfd    int32
 	Filename [256]int8
 }
 

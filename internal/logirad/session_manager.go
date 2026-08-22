@@ -36,15 +36,27 @@ const (
 
 type SessionManager struct {
 	collector collector.Collector
+	caps      CollectorCapabilities
 
 	mu          sync.Mutex
 	bySessionID map[string]*session
 	byCgroupID  map[uint64]*session
 }
 
-func NewSessionManager(col collector.Collector) *SessionManager {
+type CollectorCapabilities struct {
+	Exec bool
+	File bool
+	Net  bool
+}
+
+func NewSessionManager(col collector.Collector, configured ...CollectorCapabilities) *SessionManager {
+	caps := CollectorCapabilities{Exec: true, File: true, Net: true}
+	if len(configured) > 0 {
+		caps = configured[0]
+	}
 	return &SessionManager{
 		collector:   col,
+		caps:        caps,
 		bySessionID: make(map[string]*session),
 		byCgroupID:  make(map[uint64]*session),
 	}
@@ -117,16 +129,33 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 
 	now := time.Now().UTC()
 	startTS := now.UnixNano()
+	effectiveExec := req.EnableExec && m.caps.Exec
+	effectiveFile := req.EnableFile && m.caps.File
+	effectiveNet := req.EnableNet && m.caps.Net
 	meta := runs.Meta{
-		RunID:       req.RunID,
-		StartTS:     startTS,
-		Tool:        runs.SanitizeTool(req.Tool),
-		Command:     strings.Join(req.CmdArgv, " "),
-		CommandArgv: append([]string{}, req.CmdArgv...),
-		CWD:         cwd,
-		WatchPaths:  append([]string{}, req.WatchPaths...),
-		Version:     3,
+		RunID:             req.RunID,
+		StartTS:           startTS,
+		Tool:              runs.SanitizeTool(req.Tool),
+		Command:           strings.Join(req.CmdArgv, " "),
+		CommandArgv:       append([]string{}, req.CmdArgv...),
+		CWD:               cwd,
+		WatchPaths:        append([]string{}, req.WatchPaths...),
+		Version:           4,
+		AgentProvider:     strings.ToLower(strings.TrimSpace(req.AgentProvider)),
+		ExecutionLocation: "local",
 	}
+	if meta.AgentProvider != "" && meta.AgentProvider != "codex" {
+		return out, fmt.Errorf("unsupported agent provider %q", meta.AgentProvider)
+	}
+	meta.Coverage.SandboxDecisions = runs.DecisionCoverage{Availability: "unknown"}
+	if meta.AgentProvider == "codex" {
+		meta.Coverage.Agent = runs.AgentCoverage{Capture: "unknown", Interpretation: "unknown"}
+	} else {
+		meta.Coverage.Agent = runs.AgentCoverage{Capture: "unavailable", Interpretation: "not_applicable"}
+	}
+	meta.Coverage.Process = initialKernelCoverage(effectiveExec)
+	meta.Coverage.File = initialKernelCoverage(effectiveFile)
+	meta.Coverage.Network = initialKernelCoverage(effectiveNet)
 	if len(req.CustomRulesYAML) > 0 {
 		sum := sha256.Sum256(req.CustomRulesYAML)
 		meta.CustomRules = true
@@ -173,11 +202,17 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		return out, err
 	}
 
-	s := newSession(sessionID, cred.UID, cred.GID, homeDir, req.EnableExec, req.EnableFile, req.EnableNet, base, runDir, meta, store, detector, cg, cgID)
+	s := newSession(sessionID, cred.UID, cred.GID, homeDir, effectiveExec, effectiveFile, effectiveNet, base, runDir, meta, store, detector, cg, cgID)
+	if tracker, ok := m.collector.(collector.LossTracker); ok {
+		tracker.RegisterLossTarget(cgID)
+	}
 	m.mu.Lock()
 	if _, ok := m.bySessionID[sessionID]; ok {
 		m.mu.Unlock()
-		s.closeWithEnd(storage.NowUnixNanos(), metaJSONBytes)
+		if tracker, ok := m.collector.(collector.LossTracker); ok {
+			_ = tracker.SnapshotAndUnregisterLossTarget(cgID)
+		}
+		s.closeWithEnd(storage.NowUnixNanos(), collector.DropCounts{})
 		return out, fmt.Errorf("session id collision")
 	}
 	m.bySessionID[sessionID] = s
@@ -194,6 +229,13 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	}
 	cleanupRunDir = false
 	return out, nil
+}
+
+func initialKernelCoverage(enabled bool) runs.KernelCoverage {
+	if !enabled {
+		return runs.KernelCoverage{Availability: "unavailable", Capture: "not_applicable"}
+	}
+	return runs.KernelCoverage{Availability: "available", Capture: "unknown"}
 }
 
 func (m *SessionManager) StopRun(ctx context.Context, cred ipc.PeerCred, sessionID string, exitCode int) error {
@@ -230,15 +272,48 @@ func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUI
 }
 
 func (m *SessionManager) finalizeSession(s *session, endTS int64) {
-	meta := s.meta
-	meta.EndTS = endTS
-	meta.SuspiciousCount = s.store.SuspiciousCount()
-	metaJSONBytes, _ := json.Marshal(meta)
-	_ = runs.WriteMeta(s.runDir, meta)
-
-	s.closeWithEnd(endTS, metaJSONBytes)
+	var forward collector.DropCounts
+	if tracker, ok := m.collector.(collector.LossTracker); ok {
+		forward = tracker.SnapshotAndUnregisterLossTarget(s.cgroupID)
+	}
+	s.closeWithEnd(endTS, forward)
 	// Best-effort cleanup.
 	_ = s.cg.Remove()
+}
+
+func (m *SessionManager) sessionForUID(sessionID string, uid int) (*session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.bySessionID[strings.TrimSpace(sessionID)]
+	if !ok {
+		return nil, fmt.Errorf("unknown session_id")
+	}
+	if s.uid != uid {
+		return nil, fmt.Errorf("permission denied")
+	}
+	return s, nil
+}
+
+func (m *SessionManager) AppendAgentEvent(ctx context.Context, cred ipc.PeerCred, req ipc.AppendAgentEventRequest) error {
+	s, err := m.sessionForUID(req.SessionID, cred.UID)
+	if err != nil {
+		return err
+	}
+	if s.meta.AgentProvider != "codex" || req.Detail.Provider != "codex" {
+		return fmt.Errorf("agent telemetry not enabled for session")
+	}
+	return s.appendAgent(ctx, req.Detail)
+}
+
+func (m *SessionManager) FinishAgentTelemetry(ctx context.Context, cred ipc.PeerCred, req ipc.FinishAgentTelemetryRequest) error {
+	s, err := m.sessionForUID(req.SessionID, cred.UID)
+	if err != nil {
+		return err
+	}
+	if s.meta.AgentProvider != "codex" {
+		return fmt.Errorf("agent telemetry not enabled for session")
+	}
+	return s.finishAgentTelemetry(ctx, req.Stats)
 }
 
 func (m *SessionManager) hasSession(sessionID string) bool {

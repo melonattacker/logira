@@ -46,3 +46,16 @@ type TargetSetter interface {
 type ChildWaiter interface {
 	WaitForIdle(ctx context.Context) error
 }
+
+type DropCounts struct {
+	Exec uint64
+	File uint64
+	Net  uint64
+}
+
+// LossTracker reports userspace forwarding drops for active audited cgroups.
+// It does not claim visibility into losses below the collector boundary.
+type LossTracker interface {
+	RegisterLossTarget(cgroupID uint64)
+	SnapshotAndUnregisterLossTarget(cgroupID uint64) DropCounts
+}

@@ -36,7 +36,10 @@ func (jw *JSONLWriter) Append(ev Event) error {
 	if err := jw.w.WriteByte('\n'); err != nil {
 		return err
 	}
-	return nil
+	// Surface backend failures at append time so the session can attribute
+	// known persistence loss to the event type. This also makes agent append
+	// acknowledgements occur only after the normalized record left our buffer.
+	return jw.w.Flush()
 }
 
 func (jw *JSONLWriter) Close() error {

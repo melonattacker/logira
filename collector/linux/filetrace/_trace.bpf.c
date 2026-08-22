@@ -26,6 +26,7 @@ struct open_how {
 
 struct open_state {
     __u32 flags;
+    __s32 dirfd;
     char filename[MAX_PATH_LEN];
 };
 
@@ -36,6 +37,8 @@ struct file_event {
     __u32 uid;
     __u32 flags;
     __s32 fd;
+    __s32 dirfd;
+    __u32 _pad1;
     char filename[MAX_PATH_LEN];
 };
 
@@ -51,9 +54,10 @@ struct {
     __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
-static __always_inline void cache_open(__u32 tid, const char *filename, __u32 flags) {
+static __always_inline void cache_open(__u32 tid, __s32 dirfd, const char *filename, __u32 flags) {
     struct open_state st = {};
     st.flags = flags;
+    st.dirfd = dirfd;
     if (filename) {
         bpf_probe_read_user_str(st.filename, sizeof(st.filename), filename);
     }
@@ -85,6 +89,8 @@ static __always_inline void submit_open(__u32 tid, long ret) {
     ev->uid = uid;
     ev->flags = st->flags;
     ev->fd = (__s32)ret;
+    ev->dirfd = st->dirfd;
+    ev->_pad1 = 0;
     __builtin_memcpy(ev->filename, st->filename, sizeof(ev->filename));
     bpf_ringbuf_submit(ev, 0);
 
@@ -98,7 +104,7 @@ int trace_enter_openat(struct trace_event_raw_sys_enter *ctx) {
 
     const char *filename = (const char *)ctx->args[1];
     __u32 flags = (__u32)ctx->args[2];
-    cache_open(tid, filename, flags);
+    cache_open(tid, (__s32)ctx->args[0], filename, flags);
     return 0;
 }
 
@@ -122,7 +128,7 @@ int trace_enter_openat2(struct trace_event_raw_sys_enter *ctx) {
     if (howp) {
         bpf_probe_read_user(&how, sizeof(how), howp);
     }
-    cache_open(tid, filename, (__u32)how.flags);
+    cache_open(tid, (__s32)ctx->args[0], filename, (__u32)how.flags);
     return 0;
 }
 
@@ -135,4 +141,3 @@ int trace_exit_openat2(struct trace_event_raw_sys_exit *ctx) {
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
-

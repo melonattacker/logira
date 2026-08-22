@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/melonattacker/logira/internal/cliui"
+	"github.com/melonattacker/logira/internal/model"
 	"github.com/melonattacker/logira/internal/runs"
 	"github.com/melonattacker/logira/internal/storage"
 )
@@ -45,7 +46,7 @@ func QueryCommand(ctx context.Context, args []string) error {
 	}
 
 	fs.StringVar(&runSel, "run", runSel, "run id or 'last'")
-	fs.StringVar(&typ, "type", "all", "exec|file|net|detection|all")
+	fs.StringVar(&typ, "type", "all", "agent|exec|file|net|detection|all")
 	fs.StringVar(&since, "since", "", "duration like 1h, 24h, -10s")
 	fs.StringVar(&contains, "contains", "", "substring match in summary/data")
 	fs.StringVar(&path, "path", "", "path substring (file events)")
@@ -180,6 +181,33 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 	}
 
 	switch eventType {
+	case storage.TypeAgent:
+		rows := make([][]string, 0, len(evs))
+		for _, ev := range evs {
+			var d model.AgentDetail
+			_ = json.Unmarshal(ev.DataJSON, &d)
+			value := d.Command
+			if value == "" {
+				value = d.Text
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("%d", ev.Seq),
+				cliui.FormatTimestamp(ev.TS, runStartTS, tsMode),
+				cliui.Truncate(d.Kind, 20),
+				cliui.Truncate(d.ItemID, 16),
+				cliui.Truncate(d.Status, 12),
+				cliui.Truncate(value, 72),
+			})
+		}
+		cliui.RenderTable(os.Stdout, []cliui.Column{
+			{Name: "seq", MaxWidth: 6, AlignRight: true},
+			{Name: "at", MaxWidth: 18},
+			{Name: "kind", MaxWidth: 20},
+			{Name: "item", MaxWidth: 16},
+			{Name: "status", MaxWidth: 12},
+			{Name: "value", MaxWidth: 72},
+		}, rows)
+		return nil
 	case storage.TypeExec:
 		rows := make([][]string, 0, len(evs))
 		maxArg := 56
@@ -344,10 +372,12 @@ func parseEventType(v string) (storage.EventType, error) {
 		return storage.TypeFile, nil
 	case "net":
 		return storage.TypeNet, nil
+	case "agent":
+		return storage.TypeAgent, nil
 	case "detection":
 		return storage.TypeDetection, nil
 	default:
-		return "", fmt.Errorf("invalid --type %q (expected exec|file|net|detection|all)", v)
+		return "", fmt.Errorf("invalid --type %q (expected agent|exec|file|net|detection|all)", v)
 	}
 }
 
@@ -390,6 +420,7 @@ func queryUsage(w io.Writer, fs *flag.FlagSet) {
 	_, _ = fmt.Fprintln(w, "Examples:")
 	_, _ = fmt.Fprintf(w, "  %s query last --type net --limit 20\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s query --type detection --severity high\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s query --type agent --run last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s query --related-to-detections --type net\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s query --json --run last --contains curl\n\n", prog)
 

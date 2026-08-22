@@ -1,4 +1,4 @@
-# logira JSONL (v2)
+# logira JSONL
 
 logira stores one JSON object per line in `events.jsonl` under each run directory:
 
@@ -10,10 +10,28 @@ Common fields:
 - `run_id`: run identifier
 - `seq`: per-run sequence number (monotonic)
 - `ts`: unix nanos (UTC)
-- `type`: `exec` | `file` | `net` | `detection`
+- `type`: `agent` | `exec` | `file` | `net` | `detection`
+- `provenance`: `agent_runtime_reported` | `kernel_observed` | `logira_derived`
 - `pid`, `ppid`, `uid`: best-effort process metadata
 - `summary`: short, human-oriented one-liner
 - `data_json`: event-type specific JSON payload
+
+Provenance is observational: Codex JSONL is runtime/harness-reported telemetry,
+not direct evidence of model or user intent.
+
+## Agent Event (`type=agent`)
+
+Agent events are present only when a supported agent telemetry mode is enabled,
+currently with `logira run --agent codex -- codex exec --json ...`. The normalized
+payload includes `provider`, `kind`, `event_type`, emitted thread/item IDs, and
+the fields applicable to that item (`command`, `status`, `exit_code`, `text`, or
+`todo_items`). Verified Codex 0.147 kinds are `thread_started`, `turn_started`,
+`turn_completed`, `command_execution`, `agent_message`, and `todo_list`.
+
+Unknown well-formed and malformed records are preserved without inventing
+semantics. `raw_sha256` hashes the complete input record. `raw_truncated` only
+describes preservation of the raw payload; it does not by itself mean agent
+capture was partial when all correlation fields were parsed and persisted.
 
 ## Exec Event (`type=exec`)
 
@@ -55,6 +73,10 @@ Common fields:
   "data_json": {
     "op": "open",
     "path": "/home/u/.aws/credentials",
+    "raw_path": ".aws/credentials",
+    "path_resolution": "dirfd",
+    "fd": 7,
+    "dirfd": 4,
     "pid": 1234,
     "ppid": 1200,
     "uid": 1000,
@@ -66,6 +88,13 @@ Common fields:
 `data_json` fields (best-effort):
 - `op`: `create` | `modify` | `delete` | `open`
 - `path`: affected path
+- `raw_path`: original relative kernel path, when applicable
+- `path_resolution`: how a relative path was resolved (`dirfd`, `cwd`, or an
+  explicit unresolved/legacy state). The returned `fd` is not used for path
+  resolution because it may be closed and reused before userspace handles the
+  event.
+- `fd`, `dirfd`: returned descriptor and the `openat(2)` directory descriptor,
+  when supplied by the kernel tracer
 - `pid`, `ppid`, `uid`: process metadata also recorded inside file detail (best-effort)
 - `cgroup_id`: kernel cgroup id if available
 - `size_before`, `size_after`: bytes (if known; may be absent)
@@ -125,3 +154,16 @@ Detection events are derived by the active ruleset (observe-only): the built-in 
 - `severity`: `info` | `low` | `medium` | `high`
 - `message`
 - `related_event_seq`: points to the observed event `seq` that triggered the rule (best-effort)
+
+## Run coverage metadata
+
+Agent-enabled `meta.json` files separate `coverage.agent.capture` from
+`coverage.agent.interpretation`. Unknown schemas and fully persisted malformed
+records make interpretation partial without claiming that the telemetry stream
+was lost.
+
+Process, file, and network coverage each record `availability`, `capture`, and
+known loss split into `collector_forward_dropped`, `session_queue_dropped`, and
+`persistence_failures`. Kernel capture `complete` narrowly means that Logira
+knows of no loss after the relevant collector boundary. It is not proof that
+the kernel/BPF path was globally lossless.

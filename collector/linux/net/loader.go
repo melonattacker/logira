@@ -3,7 +3,6 @@
 package nettrace
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -35,6 +34,7 @@ type rawNetEvent struct {
 	IP4      uint32
 	Port     uint16
 	Pad2     uint16
+	Pad3     uint32
 	Bytes    int64
 }
 
@@ -173,8 +173,8 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			continue
 		}
 
-		var raw rawNetEvent
-		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+		raw, err := decodeNetEvent(rec.RawSample)
+		if err != nil {
 			continue
 		}
 
@@ -199,6 +199,31 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			Detail:    b,
 		}
 	}
+}
+
+func decodeNetEvent(sample []byte) (rawNetEvent, error) {
+	var raw rawNetEvent
+	const want = 48
+	if len(sample) != want {
+		return raw, fmt.Errorf("net event size %d, want %d", len(sample), want)
+	}
+	// This decoder intentionally names every C ABI offset. binary.Read on a Go
+	// struct does not reproduce C alignment padding, which previously shifted
+	// bytes by four. The port remains in sockaddr/network byte order in the BPF
+	// event and is converted here.
+	raw.TSNS = binary.LittleEndian.Uint64(sample[0:8])
+	raw.CgroupID = binary.LittleEndian.Uint64(sample[8:16])
+	raw.PID = binary.LittleEndian.Uint32(sample[16:20])
+	raw.UID = binary.LittleEndian.Uint32(sample[20:24])
+	raw.Op = sample[24]
+	raw.Proto = sample[25]
+	raw.Pad1 = binary.LittleEndian.Uint16(sample[26:28])
+	raw.IP4 = binary.LittleEndian.Uint32(sample[28:32])
+	raw.Port = binary.BigEndian.Uint16(sample[32:34])
+	raw.Pad2 = binary.LittleEndian.Uint16(sample[34:36])
+	raw.Pad3 = binary.LittleEndian.Uint32(sample[36:40])
+	raw.Bytes = int64(binary.LittleEndian.Uint64(sample[40:48]))
+	return raw, nil
 }
 
 func (t *Tracer) Stop(ctx context.Context) error {

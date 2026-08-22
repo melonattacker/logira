@@ -43,6 +43,15 @@ func TestStore_SQLiteAndJSONL(t *testing.T) {
 		t.Fatalf("seq2=%d", seq2)
 	}
 
+	agentDetail, _ := json.Marshal(model.AgentDetail{Provider: "codex", Kind: "turn_started", EventType: "turn.started"})
+	seq3, err := s.AppendAgent(12, "codex turn started", agentDetail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seq3 != 3 {
+		t.Fatalf("seq3=%d", seq3)
+	}
+
 	_, err = s.AppendDetection(13, Detection{RuleID: "R1", Severity: "high", Message: "test", RelatedEventSeq: seq2}, seq2)
 	if err != nil {
 		t.Fatal(err)
@@ -77,5 +86,13 @@ func TestStore_SQLiteAndJSONL(t *testing.T) {
 	}
 	if len(dets) != 1 {
 		t.Fatalf("expected 1 detection, got %d", len(dets))
+	}
+
+	agents, err := sqlite.Query(QueryOptions{RunID: runID, Type: TypeAgent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 || agents[0].Provenance != ProvenanceRuntimeReported {
+		t.Fatalf("agent events=%+v", agents)
 	}
 }

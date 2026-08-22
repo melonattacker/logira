@@ -6,20 +6,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/melonattacker/logira/internal/model"
 )
 
 // JSONL protocol: 1 message per line.
 // Every message must have a "type" field.
 
 const (
-	MsgTypeStartRun   = "start_run"
-	MsgTypeStartRunOK = "start_run_ok"
-	MsgTypeStopRun    = "stop_run"
-	MsgTypeAttachPID  = "attach_pid"
-	MsgTypeStatus     = "status"
-	MsgTypeStatusOK   = "status_ok"
-	MsgTypeOK         = "ok"
-	MsgTypeError      = "error"
+	MsgTypeStartRun             = "start_run"
+	MsgTypeStartRunOK           = "start_run_ok"
+	MsgTypeStopRun              = "stop_run"
+	MsgTypeAttachPID            = "attach_pid"
+	MsgTypeStatus               = "status"
+	MsgTypeStatusOK             = "status_ok"
+	MsgTypeAppendAgentEvent     = "append_agent_event"
+	MsgTypeFinishAgentTelemetry = "finish_agent_telemetry"
+	MsgTypeOK                   = "ok"
+	MsgTypeError                = "error"
 )
 
 type Envelope struct {
@@ -46,6 +50,30 @@ type StartRunRequest struct {
 
 	CustomRulesPath string `json:"custom_rules_path,omitempty"`
 	CustomRulesYAML []byte `json:"custom_rules_yaml,omitempty"`
+	AgentProvider   string `json:"agent_provider,omitempty"`
+}
+
+type AppendAgentEventRequest struct {
+	Type      string            `json:"type"`
+	SessionID string            `json:"session_id"`
+	Detail    model.AgentDetail `json:"detail"`
+}
+
+type AgentTelemetryStats struct {
+	Capture        string `json:"capture"`
+	Interpretation string `json:"interpretation"`
+	LinesSeen      uint64 `json:"lines_seen"`
+	LinesPersisted uint64 `json:"lines_persisted"`
+	Malformed      uint64 `json:"malformed"`
+	UnknownSchema  uint64 `json:"unknown_schema"`
+	RawTruncated   uint64 `json:"raw_truncated"`
+	AppendFailures uint64 `json:"append_failures"`
+}
+
+type FinishAgentTelemetryRequest struct {
+	Type      string              `json:"type"`
+	SessionID string              `json:"session_id"`
+	Stats     AgentTelemetryStats `json:"stats"`
 }
 
 type StartRunResponse struct {

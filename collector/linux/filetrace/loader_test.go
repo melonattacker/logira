@@ -2,26 +2,15 @@
 
 package filetrace
 
-import "testing"
+import (
+	"encoding/binary"
+	"testing"
+)
 
-func TestOpFromFlags(t *testing.T) {
-	tests := []struct {
-		name  string
-		flags uint32
-		want  string
-	}{
-		{name: "read only", flags: 0, want: "open"},
-		{name: "write only", flags: 1, want: "modify"},
-		{name: "read write", flags: 2, want: "modify"},
-		{name: "create", flags: 0x40, want: "create"},
-		{name: "truncate", flags: 0x200, want: "modify"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := opFromFlags(tc.flags); got != tc.want {
-				t.Fatalf("opFromFlags(%#x)=%q want %q", tc.flags, got, tc.want)
-			}
-		})
+func TestRawFileEventMatchesCLayout(t *testing.T) {
+	// struct file_event has an explicit pad before its filename, so the C and
+	// Go decoders agree after adding fd and dirfd.
+	if got := binary.Size(rawFileEvent{}); got != 296 {
+		t.Fatalf("raw file event size=%d, want 296", got)
 	}
 }

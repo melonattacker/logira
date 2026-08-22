@@ -50,11 +50,13 @@ func RunCommand(ctx context.Context, args []string) error {
 	var waitChildren bool
 	var waitChildrenTimeout time.Duration
 	var summaryModeS string
+	var agentProvider string
 
 	fs.StringVar(&logPath, "log", "", "deprecated: optional extra copy of events.jsonl written to this path")
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
 	fs.StringVar(&rulesPath, "rules", "", "path to custom detection rules YAML (appended to built-in rules)")
 	fs.StringVar(&summaryModeS, "summary", string(runSummaryModeAuto), "end-of-run summary: auto|off|detections")
+	fs.StringVar(&agentProvider, "agent", "", "enable structured agent telemetry (supported: codex)")
 	fs.Var(&watch, "watch", "deprecated compatibility flag; file event retention is rule-driven")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
@@ -80,6 +82,10 @@ func RunCommand(ctx context.Context, args []string) error {
 	if len(cmdArgs) == 0 {
 		fs.Usage()
 		return errors.New("no agent command provided")
+	}
+	agentProvider = strings.ToLower(strings.TrimSpace(agentProvider))
+	if err := validateAgentCommand(agentProvider, cmdArgs); err != nil {
+		return err
 	}
 	if strings.TrimSpace(logPath) != "" {
 		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.logira/runs/<run-id>/")
@@ -152,6 +158,7 @@ func RunCommand(ctx context.Context, args []string) error {
 
 		CustomRulesPath: customRulesPath,
 		CustomRulesYAML: customRulesYAML,
+		AgentProvider:   agentProvider,
 	}
 
 	startResp, err := client.StartRun(ctx, startReq)
@@ -175,7 +182,16 @@ func RunCommand(ctx context.Context, args []string) error {
 
 	cmd := exec.CommandContext(ctx, self, helperArgs...) //nolint:gosec // helper exec wraps the audited user command under logira's cgroup.
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	var codexStdout io.ReadCloser
+	if agentProvider == "codex" {
+		codexStdout, err = cmd.StdoutPipe()
+		if err != nil {
+			_ = client.StopRun(context.Background(), startResp.SessionID, 127)
+			return fmt.Errorf("capture codex stdout: %w", err)
+		}
+	} else {
+		cmd.Stdout = os.Stdout
+	}
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 
@@ -184,8 +200,29 @@ func RunCommand(ctx context.Context, args []string) error {
 		return fmt.Errorf("start agent command: %w", err)
 	}
 
+	var telemetryDone <-chan codexStreamResult
+	if codexStdout != nil {
+		done := make(chan codexStreamResult, 1)
+		telemetryDone = done
+		go func() {
+			done <- consumeCodexJSONL(ctx, codexStdout, os.Stdout, startResp.SessionID)
+		}()
+	}
+
 	waitErr := cmd.Wait()
 	exitCode := exitCodeFromErr(waitErr)
+	if telemetryDone != nil {
+		streamResult := <-telemetryDone
+		if streamResult.Warning != nil {
+			fmt.Fprintf(os.Stderr, "warning: Codex telemetry was only partially captured: %v\n", streamResult.Warning)
+		}
+		finishCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		finishErr := ipc.FinishAgentTelemetry(finishCtx, startResp.SessionID, streamResult.Stats)
+		cancel()
+		if finishErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not finalize Codex telemetry coverage: %v\n", finishErr)
+		}
+	}
 
 	if waitChildren {
 		drainCtx, cancel := context.WithTimeout(context.Background(), waitChildrenTimeout)
@@ -273,11 +310,13 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	_, _ = fmt.Fprintln(w, "  End-of-run summaries are written to stderr; use --summary off to suppress them.")
 	_, _ = fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
 	_, _ = fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
+	_, _ = fmt.Fprintln(w, "  --agent codex requires an explicit 'codex exec --json' command.")
 	_, _ = fmt.Fprintln(w)
 
 	_, _ = fmt.Fprintln(w, "Examples:")
 	_, _ = fmt.Fprintf(w, "  %s run -- bash -lc 'echo hi > x.txt; curl -s https://example.com >/dev/null'\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s run --summary detections -- claude\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s run --agent codex -- codex exec --json 'Inspect the repository'\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s run --rules ./my-rules.yaml -- bash -lc 'cat ~/.aws/credentials >/dev/null'\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s run --exec=false --file=true --net=false -- bash -lc 'echo hi > x.txt'\n\n", prog)
 

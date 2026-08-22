@@ -14,7 +14,7 @@ import (
 
 type traceAddrInfo struct {
 	Ip4    uint32
-	Port   uint16
+	PortBe uint16
 	Family uint16
 }
 

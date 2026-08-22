@@ -147,6 +147,28 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 			EnableNet:  s.cfg.EnableNet,
 		}
 		_, _ = c.Write(ipc.MustLine(resp))
+	case ipc.MsgTypeAppendAgentEvent:
+		var req ipc.AppendAgentEventRequest
+		if err := json.Unmarshal(line, &req); err != nil {
+			_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("decode append_agent_event: %v", err)))
+			return
+		}
+		if err := s.sessions.AppendAgentEvent(ctx, cred, req); err != nil {
+			_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("%v", err)))
+			return
+		}
+		_, _ = c.Write(ipc.MustLine(ipc.OKResponse{Type: ipc.MsgTypeOK}))
+	case ipc.MsgTypeFinishAgentTelemetry:
+		var req ipc.FinishAgentTelemetryRequest
+		if err := json.Unmarshal(line, &req); err != nil {
+			_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("decode finish_agent_telemetry: %v", err)))
+			return
+		}
+		if err := s.sessions.FinishAgentTelemetry(ctx, cred, req); err != nil {
+			_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("%v", err)))
+			return
+		}
+		_, _ = c.Write(ipc.MustLine(ipc.OKResponse{Type: ipc.MsgTypeOK}))
 	default:
 		_, _ = c.Write(ipc.MustLine(ipc.NewErrorf("unknown message type %q", typ)))
 	}

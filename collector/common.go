@@ -15,3 +15,5 @@ type Config = common.Config
 type Collector = common.Collector
 type TargetSetter = common.TargetSetter
 type ChildWaiter = common.ChildWaiter
+type DropCounts = common.DropCounts
+type LossTracker = common.LossTracker

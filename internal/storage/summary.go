@@ -211,6 +211,7 @@ func (s *SQLite) GetEventBySeq(runID string, seq int64) (Event, error) {
 		return out, err
 	}
 	out.Type = EventType(typ)
+	out.Provenance = ProvenanceForType(out.Type)
 	out.PID = int(pid.Int64)
 	out.PPID = int(ppid.Int64)
 	out.UID = int(uid.Int64)

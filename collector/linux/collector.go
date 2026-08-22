@@ -28,8 +28,10 @@ type LinuxCollector struct {
 	netTracer  *nettrace.Tracer
 	fileTracer *filetrace.Tracer
 
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	lossMu      sync.Mutex
+	lossTargets map[uint64]collector.DropCounts
 }
 
 func NewCollector(cfg collector.Config) *LinuxCollector {
@@ -46,7 +48,7 @@ func NewCollector(cfg collector.Config) *LinuxCollector {
 		cfg.WatchPaths = []string{"."}
 	}
 
-	return &LinuxCollector{cfg: cfg}
+	return &LinuxCollector{cfg: cfg, lossTargets: make(map[uint64]collector.DropCounts)}
 }
 
 func (lc *LinuxCollector) Init(ctx context.Context) error {
@@ -203,8 +205,48 @@ func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.E
 	select {
 	case out <- ev:
 	default:
-		// Drop under backpressure.
+		lc.recordForwardDrop(ev)
 	}
+}
+
+func (lc *LinuxCollector) RegisterLossTarget(cgroupID uint64) {
+	if cgroupID == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	lc.lossTargets[cgroupID] = collector.DropCounts{}
+	lc.lossMu.Unlock()
+}
+
+func (lc *LinuxCollector) SnapshotAndUnregisterLossTarget(cgroupID uint64) collector.DropCounts {
+	lc.lossMu.Lock()
+	defer lc.lossMu.Unlock()
+	out := lc.lossTargets[cgroupID]
+	delete(lc.lossTargets, cgroupID)
+	return out
+}
+
+func (lc *LinuxCollector) recordForwardDrop(ev collector.Event) {
+	var x struct {
+		CgroupID uint64 `json:"cgroup_id"`
+	}
+	if json.Unmarshal(ev.Detail, &x) != nil || x.CgroupID == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	c, ok := lc.lossTargets[x.CgroupID]
+	if ok {
+		switch ev.Type {
+		case collector.EventTypeExec:
+			c.Exec++
+		case collector.EventTypeFile:
+			c.File++
+		case collector.EventTypeNet:
+			c.Net++
+		}
+		lc.lossTargets[x.CgroupID] = c
+	}
+	lc.lossMu.Unlock()
 }
 
 func (lc *LinuxCollector) enrichExecCWD(ev collector.Event) collector.Event {

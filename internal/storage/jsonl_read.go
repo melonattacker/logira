@@ -31,6 +31,9 @@ func ReadJSONL(path string) ([]Event, error) {
 		if err := json.Unmarshal(s.Bytes(), &ev); err != nil {
 			return nil, fmt.Errorf("unmarshal %s:%d: %w", path, line, err)
 		}
+		if ev.Provenance == "" {
+			ev.Provenance = ProvenanceForType(ev.Type)
+		}
 		out = append(out, ev)
 	}
 	if err := s.Err(); err != nil {

@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"01a026fc-1c90-7c11-85d9-f442557bde8b"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll create the requested one-step plan, then emit the marker."}}
+{"type":"item.started","item":{"id":"item_1","type":"todo_list","items":[{"text":"emit marker","completed":false}]}}
+{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"printf \\\"LOGIRA_SCHEMA_MARKER\\\\\\\\n\\\"\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"printf \\\"LOGIRA_SCHEMA_MARKER\\\\\\\\n\\\"\"","aggregated_output":"LOGIRA_SCHEMA_MARKER\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"done"}}
+{"type":"item.completed","item":{"id":"item_1","type":"todo_list","items":[{"text":"emit marker","completed":false}]}}
+{"type":"turn.completed","usage":{"input_tokens":30802,"cached_input_tokens":25088,"cache_write_input_tokens":0,"output_tokens":120,"reasoning_output_tokens":8}}

@@ -90,15 +90,16 @@ func (s *Store) AppendObserved(ts int64, typ EventType, pid, ppid, uid int, summ
 	s.mu.Unlock()
 
 	ev := Event{
-		RunID:    s.runID,
-		Seq:      seq,
-		TS:       ts,
-		Type:     typ,
-		PID:      pid,
-		PPID:     ppid,
-		UID:      uid,
-		Summary:  summary,
-		DataJSON: data,
+		RunID:      s.runID,
+		Seq:        seq,
+		TS:         ts,
+		Type:       typ,
+		Provenance: ProvenanceForType(typ),
+		PID:        pid,
+		PPID:       ppid,
+		UID:        uid,
+		Summary:    summary,
+		DataJSON:   data,
 	}
 
 	if err := s.jsonl.Append(ev); err != nil {
@@ -119,6 +120,12 @@ func (s *Store) AppendObserved(ts int64, typ EventType, pid, ppid, uid int, summ
 	return seq, nil
 }
 
+// AppendAgent stores normalized agent runtime telemetry in the common event
+// timeline. Agent events intentionally carry no kernel PID attribution.
+func (s *Store) AppendAgent(ts int64, summary string, data json.RawMessage) (int64, error) {
+	return s.AppendObserved(ts, TypeAgent, 0, 0, 0, summary, data, EventRow{})
+}
+
 // AppendDetection stores a detection event. It is written to JSONL (type=detection) and to the detections table.
 func (s *Store) AppendDetection(ts int64, det Detection, relatedSeq int64) (int64, error) {
 	if det.RelatedEventSeq == 0 {
@@ -135,12 +142,13 @@ func (s *Store) AppendDetection(ts int64, det Detection, relatedSeq int64) (int6
 	s.mu.Unlock()
 
 	ev := Event{
-		RunID:    s.runID,
-		Seq:      seq,
-		TS:       ts,
-		Type:     TypeDetection,
-		Summary:  fmt.Sprintf("[%s] %s: %s", det.Severity, det.RuleID, det.Message),
-		DataJSON: b,
+		RunID:      s.runID,
+		Seq:        seq,
+		TS:         ts,
+		Type:       TypeDetection,
+		Provenance: ProvenanceForType(TypeDetection),
+		Summary:    fmt.Sprintf("[%s] %s: %s", det.Severity, det.RuleID, det.Message),
+		DataJSON:   b,
 	}
 	if err := s.jsonl.Append(ev); err != nil {
 		return 0, err

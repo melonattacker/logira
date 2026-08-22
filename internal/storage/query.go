@@ -41,7 +41,7 @@ func (s *SQLite) Query(opts QueryOptions) ([]Event, error) {
 			return nil, err
 		}
 		return evs, nil
-	case TypeExec, TypeFile, TypeNet:
+	case TypeExec, TypeFile, TypeNet, TypeAgent:
 		if opts.RelatedToDetections {
 			return s.queryObservedRelatedToDetections(opts, limit)
 		}
@@ -141,16 +141,18 @@ func (s *SQLite) queryObserved(opts QueryOptions, limit int) ([]Event, error) {
 		if err := rows.Scan(&runID, &seq, &ts, &typ, &pid, &ppid, &uid, &summary, &data); err != nil {
 			return nil, err
 		}
+		eventType := EventType(typ)
 		out = append(out, Event{
-			RunID:    runID,
-			Seq:      seq,
-			TS:       ts,
-			Type:     EventType(typ),
-			PID:      int(pid.Int64),
-			PPID:     int(ppid.Int64),
-			UID:      int(uid.Int64),
-			Summary:  summary,
-			DataJSON: json.RawMessage(data),
+			RunID:      runID,
+			Seq:        seq,
+			TS:         ts,
+			Type:       eventType,
+			Provenance: ProvenanceForType(eventType),
+			PID:        int(pid.Int64),
+			PPID:       int(ppid.Int64),
+			UID:        int(uid.Int64),
+			Summary:    summary,
+			DataJSON:   json.RawMessage(data),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -221,16 +223,18 @@ func (s *SQLite) queryObservedRelatedToDetections(opts QueryOptions, limit int) 
 		if err := rows.Scan(&runID, &seq, &ts, &typ, &pid, &ppid, &uid, &summary, &data); err != nil {
 			return nil, err
 		}
+		eventType := EventType(typ)
 		out = append(out, Event{
-			RunID:    runID,
-			Seq:      seq,
-			TS:       ts,
-			Type:     EventType(typ),
-			PID:      int(pid.Int64),
-			PPID:     int(ppid.Int64),
-			UID:      int(uid.Int64),
-			Summary:  summary,
-			DataJSON: json.RawMessage(data),
+			RunID:      runID,
+			Seq:        seq,
+			TS:         ts,
+			Type:       eventType,
+			Provenance: ProvenanceForType(eventType),
+			PID:        int(pid.Int64),
+			PPID:       int(ppid.Int64),
+			UID:        int(uid.Int64),
+			Summary:    summary,
+			DataJSON:   json.RawMessage(data),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -303,12 +307,13 @@ func (s *SQLite) queryDetections(opts QueryOptions, limit int) ([]Event, error) 
 		}
 		b, _ := json.Marshal(d)
 		out = append(out, Event{
-			RunID:    runID,
-			Seq:      seq,
-			TS:       ts,
-			Type:     TypeDetection,
-			Summary:  fmt.Sprintf("[%s] %s: %s", sev, ruleID, msg),
-			DataJSON: b,
+			RunID:      runID,
+			Seq:        seq,
+			TS:         ts,
+			Type:       TypeDetection,
+			Provenance: ProvenanceForType(TypeDetection),
+			Summary:    fmt.Sprintf("[%s] %s: %s", sev, ruleID, msg),
+			DataJSON:   b,
 		})
 	}
 	if err := rows.Err(); err != nil {
