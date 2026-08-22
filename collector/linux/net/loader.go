@@ -24,19 +24,23 @@ import (
 )
 
 type rawNetEvent struct {
-	TSNS     uint64
-	CgroupID uint64
-	PID      uint32
-	UID      uint32
-	Op       uint8
-	Proto    uint8
-	Pad1     uint16
-	IP4      uint32
-	Port     uint16
-	Pad2     uint16
-	Pad3     uint32
-	Bytes    int64
+	ABIVersion   uint8
+	Op           uint8
+	Family       uint8
+	Proto        uint8
+	ConnectState uint8
+	Address      [16]byte
+	Port         uint16
+	TSNS         uint64
+	CgroupID     uint64
+	PID          uint32
+	TID          uint32
+	TGID         uint32
+	UID          uint32
+	Bytes        int64
 }
+
+const netEventWireSize = 72
 
 type Tracer struct {
 	mu      sync.Mutex
@@ -105,6 +109,10 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		name  string
 		prog  string
 	}{
+		{"syscalls", "sys_enter_socket", "trace_enter_socket"},
+		{"syscalls", "sys_exit_socket", "trace_exit_socket"},
+		{"syscalls", "sys_enter_close", "trace_enter_close"},
+		{"syscalls", "sys_exit_close", "trace_exit_close"},
 		{"syscalls", "sys_enter_connect", "trace_enter_connect"},
 		{"syscalls", "sys_exit_connect", "trace_exit_connect"},
 		{"syscalls", "sys_enter_sendto", "trace_enter_sendto"},
@@ -179,12 +187,17 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		detail := model.NetDetail{
-			Op:       opName(raw.Op),
-			Proto:    protoName(raw.Proto),
-			DstIP:    ipv4String(raw.IP4),
-			DstPort:  raw.Port,
-			Bytes:    raw.Bytes,
-			CgroupID: raw.CgroupID,
+			Op:           opName(raw.Op),
+			ConnectState: connectStateName(raw.ConnectState),
+			Proto:        protoName(raw.Proto),
+			DstIP:        addressString(raw.Family, raw.Address),
+			DstPort:      raw.Port,
+			Bytes:        raw.Bytes,
+			CgroupID:     raw.CgroupID,
+			PID:          int(raw.PID),
+			TID:          int(raw.TID),
+			TGID:         int(raw.TGID),
+			KernelTimeNS: raw.TSNS,
 		}
 		b, err := json.Marshal(detail)
 		if err != nil {
@@ -203,26 +216,28 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 
 func decodeNetEvent(sample []byte) (rawNetEvent, error) {
 	var raw rawNetEvent
-	const want = 48
-	if len(sample) != want {
-		return raw, fmt.Errorf("net event size %d, want %d", len(sample), want)
+	if len(sample) != netEventWireSize {
+		return raw, fmt.Errorf("net event size %d, want %d", len(sample), netEventWireSize)
 	}
-	// This decoder intentionally names every C ABI offset. binary.Read on a Go
-	// struct does not reproduce C alignment padding, which previously shifted
-	// bytes by four. The port remains in sockaddr/network byte order in the BPF
-	// event and is converted here.
-	raw.TSNS = binary.LittleEndian.Uint64(sample[0:8])
-	raw.CgroupID = binary.LittleEndian.Uint64(sample[8:16])
-	raw.PID = binary.LittleEndian.Uint32(sample[16:20])
-	raw.UID = binary.LittleEndian.Uint32(sample[20:24])
-	raw.Op = sample[24]
-	raw.Proto = sample[25]
-	raw.Pad1 = binary.LittleEndian.Uint16(sample[26:28])
-	raw.IP4 = binary.LittleEndian.Uint32(sample[28:32])
-	raw.Port = binary.BigEndian.Uint16(sample[32:34])
-	raw.Pad2 = binary.LittleEndian.Uint16(sample[34:36])
-	raw.Pad3 = binary.LittleEndian.Uint32(sample[36:40])
-	raw.Bytes = int64(binary.LittleEndian.Uint64(sample[40:48]))
+	if sample[0] != 1 {
+		return raw, fmt.Errorf("unsupported net ABI version %d", sample[0])
+	}
+	// Every offset is asserted in _trace.bpf.c. Port and address bytes are
+	// copied from sockaddr unchanged; host scalars use fixed big-endian.
+	raw.ABIVersion = sample[0]
+	raw.Op = sample[1]
+	raw.Family = sample[2]
+	raw.Proto = sample[3]
+	raw.ConnectState = sample[4]
+	copy(raw.Address[:], sample[8:24])
+	raw.Port = binary.BigEndian.Uint16(sample[24:26])
+	raw.TSNS = binary.BigEndian.Uint64(sample[32:40])
+	raw.CgroupID = binary.BigEndian.Uint64(sample[40:48])
+	raw.PID = binary.BigEndian.Uint32(sample[48:52])
+	raw.TID = binary.BigEndian.Uint32(sample[52:56])
+	raw.TGID = binary.BigEndian.Uint32(sample[56:60])
+	raw.UID = binary.BigEndian.Uint32(sample[60:64])
+	raw.Bytes = int64(binary.BigEndian.Uint64(sample[64:72]))
 	return raw, nil
 }
 
@@ -286,12 +301,26 @@ func protoName(proto uint8) string {
 	}
 }
 
-func ipv4String(ip uint32) string {
-	if ip == 0 {
+func connectStateName(state uint8) string {
+	switch state {
+	case 1:
+		return "completed"
+	case 2:
+		return "in_progress"
+	default:
 		return ""
 	}
-	b := []byte{byte(ip), byte(ip >> 8), byte(ip >> 16), byte(ip >> 24)} //nolint:gosec // bytes are intentionally truncated from each IPv4 octet.
-	return net.IPv4(b[0], b[1], b[2], b[3]).String()
+}
+
+func addressString(family uint8, address [16]byte) string {
+	switch family {
+	case 2:
+		return net.IP(address[:4]).String()
+	case 10:
+		return net.IP(address[:]).String()
+	default:
+		return ""
+	}
 }
 
 func firstExistingPath(paths ...string) string {

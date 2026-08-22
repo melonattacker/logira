@@ -7,9 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -330,7 +332,11 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 			stdoutf("%s file pid=%d tid=%d op=%s syscall=%s correlation=%s path=%s path2=%s\n", ts, ev.PID, d.TID, d.Op, d.Syscall, d.Correlation, d.Path, d.Path2)
 		case storage.TypeNet:
 			d, _ := parseNetDetail(ev.DataJSON)
-			stdoutf("%s net  pid=%d op=%s dst=%s:%d bytes=%d\n", ts, ev.PID, d.Op, d.DstIP, d.DstPort, d.Bytes)
+			dst := strings.TrimSpace(d.DstIP)
+			if d.DstPort > 0 {
+				dst = net.JoinHostPort(d.DstIP, strconv.Itoa(int(d.DstPort)))
+			}
+			stdoutf("%s net  pid=%d tid=%d tgid=%d op=%s state=%s dst=%s bytes=%d\n", ts, ev.PID, d.TID, d.TGID, d.Op, d.ConnectState, dst, d.Bytes)
 		case storage.TypeAgent:
 			var d model.AgentDetail
 			_ = json.Unmarshal(ev.DataJSON, &d)
@@ -537,7 +543,7 @@ func topDestinationsFromEvents(evs []storage.Event, n int) []storage.TopPair {
 		}
 		key := ip
 		if d.DstPort != 0 {
-			key = fmt.Sprintf("%s:%d", ip, d.DstPort)
+			key = net.JoinHostPort(ip, strconv.Itoa(int(d.DstPort)))
 		}
 		counts[key]++
 	}

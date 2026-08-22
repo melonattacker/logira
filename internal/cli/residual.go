@@ -6,9 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/melonattacker/logira/internal/analyzer/residual"
@@ -331,7 +333,7 @@ func renderEpisodeNetworkEffects(effects []residual.NetworkEffect, verbose bool)
 	for _, effect := range effects[:limit] {
 		dst := effect.DstIP
 		if effect.DstPort > 0 {
-			dst = fmt.Sprintf("%s:%d", dst, effect.DstPort)
+			dst = net.JoinHostPort(dst, strconv.Itoa(int(effect.DstPort)))
 		}
 		stdoutf("    seq=%d pid=%d via_exec=%d %s %s %s bytes=%d\n", effect.Seq, effect.PID, effect.ProcessExecSeq,
 			emptyAs(effect.Op, "unknown"), emptyAs(effect.Proto, "unknown"), dst, effect.Bytes)

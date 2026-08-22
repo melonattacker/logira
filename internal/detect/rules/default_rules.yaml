@@ -27,6 +27,7 @@ rules:
     when:
       net:
         op: "connect"
+        proto: "tcp"
         dst_port_gte: 1024
     message: "outbound connect to high port {{net.dst_ip}}:{{net.dst_port}}"
 

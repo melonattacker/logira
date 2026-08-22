@@ -155,21 +155,43 @@ explicit unresolved state.
   "summary": "net connect 140.82.121.4:443 bytes=0",
   "data_json": {
     "op": "connect",
-    "proto": "unknown",
+    "connect_state": "completed",
+    "proto": "tcp",
     "dst_ip": "140.82.121.4",
     "dst_port": 443,
     "bytes": 0,
-    "cgroup_id": 4567890123
+    "cgroup_id": 4567890123,
+    "pid": 1234,
+    "tid": 1234,
+    "tgid": 1234,
+    "kernel_time_ns": 9876543210
   }
 }
 ```
 
 `data_json` fields (best-effort):
 - `op`: `connect` | `send` | `recv`
-- `proto`: `tcp` | `udp` | `unknown`
-- `dst_ip`, `dst_port`
-- `bytes`: for `send`/`recv`
+- `connect_state`: `completed` | `in_progress` for connect events. A successful
+  connect exit is `completed`; `EINPROGRESS` is retained as structured
+  `in_progress` evidence. Both states populate the minimal fd-to-destination
+  cache used by later send/recv events.
+- `proto`: `tcp` | `udp` | `unknown`. Linux records the socket type at
+  successful `socket(2)` return and invalidates the minimal fd metadata after
+  successful `close(2)`; inherited, duplicated, or otherwise unobserved fds
+  can remain `unknown`.
+- `dst_ip`, `dst_port`: IPv4 or IPv6 destination and host-readable port
+- `bytes`: the signed syscall return value for `send`/`recv`
 - `cgroup_id`: kernel cgroup id if available
+- `pid`, `tid`, `tgid`: kernel-observed process and task identifiers
+- `kernel_time_ns`: BPF monotonic observation timestamp
+
+The Linux net probe uses a fixed, architecture-independent wire ABI (version
+1, 72 bytes). Address and port bytes are copied from `sockaddr` unchanged in
+network byte order: port 443 is `01 bb`, and port 18080 is `46 a0`. Go decodes
+the port as big-endian. Host-order timestamp, cgroup, task, uid, and byte-count
+scalars are converted to big-endian before emission; a signed byte count uses
+the two's-complement `uint64` representation. C compile-time size/offset
+assertions and Go raw-byte fixtures lock the two sides to the same layout.
 
 ## Detection Event (`type=detection`)
 

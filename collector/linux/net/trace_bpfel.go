@@ -13,22 +13,23 @@ import (
 )
 
 type traceAddrInfo struct {
-	Ip4    uint32
-	PortBe uint16
-	Family uint16
+	Family  uint8
+	Address [16]uint8
+	PortBe  [2]uint8
 }
 
 type traceFdKey struct {
-	Pid uint32
-	Fd  int32
+	Tgid uint32
+	Fd   int32
 }
 
 type traceIoState struct {
-	Fd   int32
-	Op   uint8
-	Pad1 uint8
-	Pad2 uint16
-	Addr traceAddrInfo
+	Fd    int32
+	Op    uint8
+	Proto uint8
+	Pad   [2]uint8
+	Addr  traceAddrInfo
+	_     [1]byte
 }
 
 // loadTrace returns the embedded CollectionSpec for trace.
@@ -72,16 +73,20 @@ type traceSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type traceProgramSpecs struct {
+	TraceEnterClose    *ebpf.ProgramSpec `ebpf:"trace_enter_close"`
 	TraceEnterConnect  *ebpf.ProgramSpec `ebpf:"trace_enter_connect"`
 	TraceEnterRecvfrom *ebpf.ProgramSpec `ebpf:"trace_enter_recvfrom"`
 	TraceEnterRecvmsg  *ebpf.ProgramSpec `ebpf:"trace_enter_recvmsg"`
 	TraceEnterSendmsg  *ebpf.ProgramSpec `ebpf:"trace_enter_sendmsg"`
 	TraceEnterSendto   *ebpf.ProgramSpec `ebpf:"trace_enter_sendto"`
+	TraceEnterSocket   *ebpf.ProgramSpec `ebpf:"trace_enter_socket"`
+	TraceExitClose     *ebpf.ProgramSpec `ebpf:"trace_exit_close"`
 	TraceExitConnect   *ebpf.ProgramSpec `ebpf:"trace_exit_connect"`
 	TraceExitRecvfrom  *ebpf.ProgramSpec `ebpf:"trace_exit_recvfrom"`
 	TraceExitRecvmsg   *ebpf.ProgramSpec `ebpf:"trace_exit_recvmsg"`
 	TraceExitSendmsg   *ebpf.ProgramSpec `ebpf:"trace_exit_sendmsg"`
 	TraceExitSendto    *ebpf.ProgramSpec `ebpf:"trace_exit_sendto"`
+	TraceExitSocket    *ebpf.ProgramSpec `ebpf:"trace_exit_socket"`
 }
 
 // traceMapSpecs contains maps before they are loaded into the kernel.
@@ -90,8 +95,11 @@ type traceProgramSpecs struct {
 type traceMapSpecs struct {
 	Events         *ebpf.MapSpec `ebpf:"events"`
 	FdAddr         *ebpf.MapSpec `ebpf:"fd_addr"`
+	FdProto        *ebpf.MapSpec `ebpf:"fd_proto"`
+	PendingClose   *ebpf.MapSpec `ebpf:"pending_close"`
 	PendingConnect *ebpf.MapSpec `ebpf:"pending_connect"`
 	PendingIo      *ebpf.MapSpec `ebpf:"pending_io"`
+	PendingSocket  *ebpf.MapSpec `ebpf:"pending_socket"`
 }
 
 // traceObjects contains all objects after they have been loaded into the kernel.
@@ -115,16 +123,22 @@ func (o *traceObjects) Close() error {
 type traceMaps struct {
 	Events         *ebpf.Map `ebpf:"events"`
 	FdAddr         *ebpf.Map `ebpf:"fd_addr"`
+	FdProto        *ebpf.Map `ebpf:"fd_proto"`
+	PendingClose   *ebpf.Map `ebpf:"pending_close"`
 	PendingConnect *ebpf.Map `ebpf:"pending_connect"`
 	PendingIo      *ebpf.Map `ebpf:"pending_io"`
+	PendingSocket  *ebpf.Map `ebpf:"pending_socket"`
 }
 
 func (m *traceMaps) Close() error {
 	return _TraceClose(
 		m.Events,
 		m.FdAddr,
+		m.FdProto,
+		m.PendingClose,
 		m.PendingConnect,
 		m.PendingIo,
+		m.PendingSocket,
 	)
 }
 
@@ -132,30 +146,38 @@ func (m *traceMaps) Close() error {
 //
 // It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
 type tracePrograms struct {
+	TraceEnterClose    *ebpf.Program `ebpf:"trace_enter_close"`
 	TraceEnterConnect  *ebpf.Program `ebpf:"trace_enter_connect"`
 	TraceEnterRecvfrom *ebpf.Program `ebpf:"trace_enter_recvfrom"`
 	TraceEnterRecvmsg  *ebpf.Program `ebpf:"trace_enter_recvmsg"`
 	TraceEnterSendmsg  *ebpf.Program `ebpf:"trace_enter_sendmsg"`
 	TraceEnterSendto   *ebpf.Program `ebpf:"trace_enter_sendto"`
+	TraceEnterSocket   *ebpf.Program `ebpf:"trace_enter_socket"`
+	TraceExitClose     *ebpf.Program `ebpf:"trace_exit_close"`
 	TraceExitConnect   *ebpf.Program `ebpf:"trace_exit_connect"`
 	TraceExitRecvfrom  *ebpf.Program `ebpf:"trace_exit_recvfrom"`
 	TraceExitRecvmsg   *ebpf.Program `ebpf:"trace_exit_recvmsg"`
 	TraceExitSendmsg   *ebpf.Program `ebpf:"trace_exit_sendmsg"`
 	TraceExitSendto    *ebpf.Program `ebpf:"trace_exit_sendto"`
+	TraceExitSocket    *ebpf.Program `ebpf:"trace_exit_socket"`
 }
 
 func (p *tracePrograms) Close() error {
 	return _TraceClose(
+		p.TraceEnterClose,
 		p.TraceEnterConnect,
 		p.TraceEnterRecvfrom,
 		p.TraceEnterRecvmsg,
 		p.TraceEnterSendmsg,
 		p.TraceEnterSendto,
+		p.TraceEnterSocket,
+		p.TraceExitClose,
 		p.TraceExitConnect,
 		p.TraceExitRecvfrom,
 		p.TraceExitRecvmsg,
 		p.TraceExitSendmsg,
 		p.TraceExitSendto,
+		p.TraceExitSocket,
 	)
 }
 

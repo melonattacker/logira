@@ -114,6 +114,7 @@ Use `when.net`:
 when:
   net:
     op: "connect"
+    proto: "tcp"
     dst_port_in: [443, 8443]
     dst_ip_in: ["169.254.169.254"]
 ```
@@ -121,6 +122,7 @@ when:
 Supported fields:
 
 - `op` (optional): `connect` | `send` | `recv` (best-effort observed values)
+- `proto` (optional): `tcp` | `udp` | `unknown` (best-effort observed value)
 - `dst_port_gte` (optional): integer lower bound (0-65535)
 - `dst_port_in` (optional): exact allowed destination ports
 - `dst_ip_in` (optional): exact allowed destination IP strings
@@ -128,6 +130,9 @@ Supported fields:
 Notes:
 
 - Fields combine with AND semantics.
+- The built-in N001 high-port rule is TCP-only. UDP destination-selection
+  probes (including real port-65535 probes made by some runtimes) therefore do
+  not masquerade as high-port application connections.
 - If no `when.net` fields are set, the rule matches all net events of type `net`.
 - If destination metadata is unavailable for an event, `dst_ip` / `dst_port` matching may fail.
 - Depending on kernel/environment, you may see `send`/`recv` without a useful `connect` event for some traffic (especially localhost demos).
@@ -176,6 +181,7 @@ Examples of invalid rules that `logira run --rules` will reject:
 - `file.op_in` missing or containing unsupported values
 - invalid `path_regex`
 - `net.dst_port_in` values outside `0..65535`
+- `net.proto` values other than `tcp`, `udp`, or `unknown`
 
 ## Examples
 

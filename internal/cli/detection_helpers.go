@@ -3,7 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/melonattacker/logira/internal/cliui"
@@ -104,7 +106,7 @@ func evidenceFromEvent(ev storage.Event, max int) string {
 		}
 		dst := strings.TrimSpace(d.DstIP)
 		if d.DstPort > 0 {
-			dst = fmt.Sprintf("%s:%d", dst, d.DstPort)
+			dst = net.JoinHostPort(dst, strconv.Itoa(int(d.DstPort)))
 		}
 		base := strings.TrimSpace(d.Op)
 		if base == "" {

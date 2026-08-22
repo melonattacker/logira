@@ -37,6 +37,7 @@ type FileWhen struct {
 
 type NetWhen struct {
 	Op         string   `yaml:"op"`
+	Proto      string   `yaml:"proto"`
 	DstPortGte *int     `yaml:"dst_port_gte"`
 	DstPortIn  []int    `yaml:"dst_port_in"`
 	DstIPIn    []string `yaml:"dst_ip_in"`

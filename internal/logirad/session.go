@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -295,7 +296,11 @@ func (s *session) handleObservedEvent(ev collector.Event) error {
 	case storage.TypeNet:
 		var d model.NetDetail
 		_ = json.Unmarshal(ev.Detail, &d)
-		summary = fmt.Sprintf("net %s %s:%d bytes=%d", d.Op, d.DstIP, d.DstPort, d.Bytes)
+		dst := strings.TrimSpace(d.DstIP)
+		if d.DstPort > 0 {
+			dst = net.JoinHostPort(d.DstIP, strconv.Itoa(int(d.DstPort)))
+		}
+		summary = fmt.Sprintf("net %s %s bytes=%d", d.Op, dst, d.Bytes)
 		attrs.DstIP = d.DstIP
 		attrs.DstPort = int(d.DstPort)
 	}

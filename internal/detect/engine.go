@@ -198,6 +198,9 @@ func (e *Engine) evalNetRules(rs []Rule, d model.NetDetail) []storage.Detection 
 		if strings.TrimSpace(w.Op) != "" && d.Op != w.Op {
 			continue
 		}
+		if strings.TrimSpace(w.Proto) != "" && d.Proto != w.Proto {
+			continue
+		}
 		if w.DstPortGte != nil && int(d.DstPort) < *w.DstPortGte {
 			continue
 		}

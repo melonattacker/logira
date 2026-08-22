@@ -324,7 +324,7 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 			d, _ := parseNetDetail(ev.DataJSON)
 			dst := strings.TrimSpace(d.DstIP)
 			if d.DstPort > 0 {
-				dst = fmt.Sprintf("%s:%d", d.DstIP, d.DstPort)
+				dst = net.JoinHostPort(d.DstIP, strconv.Itoa(int(d.DstPort)))
 			}
 			rows = append(rows, []string{
 				fmt.Sprintf("%d", ev.Seq),

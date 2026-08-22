@@ -240,6 +240,9 @@ func compilePathRegex(pattern, home string) (*regexp.Regexp, error) {
 
 func validateNetWhen(w NetWhen) error {
 	// Nothing mutually exclusive. Keep minimal guardrails.
+	if proto := strings.TrimSpace(w.Proto); proto != "" && proto != "tcp" && proto != "udp" && proto != "unknown" {
+		return fmt.Errorf("net.when: invalid proto %q", w.Proto)
+	}
 	for _, p := range w.DstPortIn {
 		if p < 0 || p > 65535 {
 			return fmt.Errorf("net.when: invalid dst_port_in %d", p)

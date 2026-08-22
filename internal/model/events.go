@@ -69,11 +69,13 @@ type FileDetail struct {
 
 type NetDetail struct {
 	Op                string `json:"op"`
+	ConnectState      string `json:"connect_state,omitempty"`
 	Proto             string `json:"proto"`
 	DstIP             string `json:"dst_ip,omitempty"`
 	DstPort           uint16 `json:"dst_port,omitempty"`
 	Bytes             int64  `json:"bytes,omitempty"`
 	CgroupID          uint64 `json:"cgroup_id,omitempty"`
+	PID               int    `json:"pid,omitempty"`
 	TID               int    `json:"tid,omitempty"`
 	TGID              int    `json:"tgid,omitempty"`
 	TaskStartKernelNS uint64 `json:"task_start_kernel_ns,omitempty"`
