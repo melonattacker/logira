@@ -140,7 +140,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		CommandArgv:       append([]string{}, req.CmdArgv...),
 		CWD:               cwd,
 		WatchPaths:        append([]string{}, req.WatchPaths...),
-		Version:           4,
+		Version:           5,
 		AgentProvider:     strings.ToLower(strings.TrimSpace(req.AgentProvider)),
 		ExecutionLocation: "local",
 	}
@@ -419,7 +419,7 @@ func (m *SessionManager) RouteEvent(ev collector.Event) {
 
 func extractCgroupID(typ string, detail json.RawMessage) uint64 {
 	switch storage.EventType(strings.TrimSpace(typ)) {
-	case storage.TypeExec, storage.TypeNet, storage.TypeFile:
+	case storage.TypeExec, storage.TypeProcess, storage.TypeNet, storage.TypeFile:
 	default:
 		return 0
 	}

@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	EventTypeExec = "exec"
-	EventTypeFile = "file"
-	EventTypeNet  = "net"
+	EventTypeExec    = "exec"
+	EventTypeProcess = "process"
+	EventTypeFile    = "file"
+	EventTypeNet     = "net"
 )
 
 var ErrLinuxOnly = errors.New("logira collector is only supported on linux")

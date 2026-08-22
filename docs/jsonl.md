@@ -10,7 +10,7 @@ Common fields:
 - `run_id`: run identifier
 - `seq`: per-run sequence number (monotonic)
 - `ts`: unix nanos (UTC)
-- `type`: `agent` | `exec` | `file` | `net` | `detection`
+- `type`: `agent` | `process` | `exec` | `file` | `net` | `detection`
 - `provenance`: `agent_runtime_reported` | `kernel_observed` | `logira_derived`
 - `pid`, `ppid`, `uid`: best-effort process metadata
 - `summary`: short, human-oriented one-liner
@@ -58,7 +58,26 @@ capture was partial when all correlation fields were parsed and persisted.
 
 `data_json` fields (best-effort):
 - `filename`, `argv`, `comm`, `cwd`, `kernel_time_ns`
+- `tid`, `tgid`, `old_pid`, `task_start_kernel_ns`, `first_observed_kernel_ns`
 - `cgroup_id`: kernel cgroup id if available
+
+## Process Event (`type=process`)
+
+Process events preserve kernel task lifecycle observations independently of
+exec. `kind` is `fork`, `exit`, or `exec_rekey`. A task instance is identified
+by `(tid, task_start_kernel_ns)`, where `task_start_kernel_ns` is the
+`bpf_ktime_get_ns()` value captured at `sched_process_fork`. It is not wall
+clock time or a `task_struct` start field. Tasks that existed before tracing
+may omit it and instead carry `first_observed_kernel_ns`.
+
+Fork records preserve the kernel-observed parent/child TIDs even when no
+userspace `/proc` metadata can be obtained. `clone_kind` is `thread_clone`,
+`process_fork`, or `unknown`. Exit records are task exits; `group_dead` remains
+`unknown` when the kernel tracepoint does not expose it structurally.
+
+An `exec_rekey` with different `old_pid` and `tid` records Linux de-threading
+during a multi-threaded exec. It preserves the task start timestamp while
+moving the identity to the post-exec TID.
 
 ## File Event (`type=file`)
 

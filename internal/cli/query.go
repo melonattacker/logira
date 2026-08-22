@@ -46,7 +46,7 @@ func QueryCommand(ctx context.Context, args []string) error {
 	}
 
 	fs.StringVar(&runSel, "run", runSel, "run id or 'last'")
-	fs.StringVar(&typ, "type", "all", "agent|exec|file|net|detection|all")
+	fs.StringVar(&typ, "type", "all", "agent|process|exec|file|net|detection|all")
 	fs.StringVar(&since, "since", "", "duration like 1h, 24h, -10s")
 	fs.StringVar(&contains, "contains", "", "substring match in summary/data")
 	fs.StringVar(&path, "path", "", "path substring (file events)")
@@ -206,6 +206,39 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 			{Name: "item", MaxWidth: 16},
 			{Name: "status", MaxWidth: 12},
 			{Name: "value", MaxWidth: 72},
+		}, rows)
+		return nil
+	case storage.TypeProcess:
+		rows := make([][]string, 0, len(evs))
+		for _, ev := range evs {
+			var d model.ProcessDetail
+			_ = json.Unmarshal(ev.DataJSON, &d)
+			peer := "-"
+			if d.Kind == "fork" {
+				peer = fmt.Sprintf("%d -> %d", d.ParentTID, d.ChildTID)
+			} else if d.Kind == "exec_rekey" {
+				peer = fmt.Sprintf("%d -> %d", d.OldPID, d.TID)
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("%d", ev.Seq),
+				cliui.FormatTimestamp(ev.TS, runStartTS, tsMode),
+				cliui.Truncate(d.Kind, 14),
+				fmt.Sprintf("%d", d.TID),
+				fmt.Sprintf("%d", d.TGID),
+				peer,
+				cliui.Truncate(d.CloneKind, 14),
+				fmt.Sprintf("%d", d.TaskStartKernelNS),
+			})
+		}
+		cliui.RenderTable(os.Stdout, []cliui.Column{
+			{Name: "seq", MaxWidth: 6, AlignRight: true},
+			{Name: "at", MaxWidth: 18},
+			{Name: "kind", MaxWidth: 14},
+			{Name: "tid", MaxWidth: 7, AlignRight: true},
+			{Name: "tgid", MaxWidth: 7, AlignRight: true},
+			{Name: "edge", MaxWidth: 18},
+			{Name: "clone", MaxWidth: 14},
+			{Name: "task_start_kernel_ns", MaxWidth: 20, AlignRight: true},
 		}, rows)
 		return nil
 	case storage.TypeExec:
@@ -368,6 +401,8 @@ func parseEventType(v string) (storage.EventType, error) {
 		return "", nil
 	case "exec":
 		return storage.TypeExec, nil
+	case "process":
+		return storage.TypeProcess, nil
 	case "file":
 		return storage.TypeFile, nil
 	case "net":
@@ -377,7 +412,7 @@ func parseEventType(v string) (storage.EventType, error) {
 	case "detection":
 		return storage.TypeDetection, nil
 	default:
-		return "", fmt.Errorf("invalid --type %q (expected agent|exec|file|net|detection|all)", v)
+		return "", fmt.Errorf("invalid --type %q (expected agent|process|exec|file|net|detection|all)", v)
 	}
 }
 

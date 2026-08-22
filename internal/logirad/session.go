@@ -235,7 +235,7 @@ func (s *session) handleMessage(msg sessionMessage) {
 func (s *session) handleObservedEvent(ev collector.Event) error {
 	typ := storage.EventType(ev.Type)
 	switch typ {
-	case storage.TypeExec, storage.TypeFile, storage.TypeNet:
+	case storage.TypeExec, storage.TypeProcess, storage.TypeFile, storage.TypeNet:
 	default:
 		return nil
 	}
@@ -253,6 +253,10 @@ func (s *session) handleObservedEvent(ev collector.Event) error {
 		_ = json.Unmarshal(ev.Detail, &d)
 		summary = execSummary(d)
 		attrs.Exe = d.Filename
+	case storage.TypeProcess:
+		var d model.ProcessDetail
+		_ = json.Unmarshal(ev.Detail, &d)
+		summary = processSummary(d)
 	case storage.TypeFile:
 		d, ok := s.normalizeFileDetail(ev)
 		if !ok {
@@ -284,7 +288,7 @@ func (s *session) handleObservedEvent(ev collector.Event) error {
 
 func (s *session) enabled(typ storage.EventType) bool {
 	switch typ {
-	case storage.TypeExec:
+	case storage.TypeExec, storage.TypeProcess:
 		return s.enableExec
 	case storage.TypeFile:
 		return s.enableFile
@@ -297,7 +301,7 @@ func (s *session) enabled(typ storage.EventType) bool {
 
 func (s *session) incrementLoss(c *lossCounters, typ storage.EventType) {
 	switch typ {
-	case storage.TypeExec:
+	case storage.TypeExec, storage.TypeProcess:
 		c.exec.Add(1)
 	case storage.TypeFile:
 		c.file.Add(1)
@@ -449,6 +453,19 @@ func execSummary(d model.ExecDetail) string {
 		return "exec " + d.Filename
 	}
 	return "exec <unknown>"
+}
+
+func processSummary(d model.ProcessDetail) string {
+	switch d.Kind {
+	case "fork":
+		return fmt.Sprintf("process fork tid=%d child_tid=%d", d.ParentTID, d.ChildTID)
+	case "exit":
+		return fmt.Sprintf("process exit tid=%d tgid=%d", d.TID, d.TGID)
+	case "exec_rekey":
+		return fmt.Sprintf("process exec_rekey old_pid=%d tid=%d", d.OldPID, d.TID)
+	default:
+		return "process " + strings.TrimSpace(d.Kind)
+	}
 }
 
 var _ = time.Now

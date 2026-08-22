@@ -6,6 +6,7 @@ type EventType string
 
 const (
 	TypeExec      EventType = "exec"
+	TypeProcess   EventType = "process"
 	TypeFile      EventType = "file"
 	TypeNet       EventType = "net"
 	TypeAgent     EventType = "agent"
@@ -35,7 +36,7 @@ func ProvenanceForType(typ EventType) string {
 	switch typ {
 	case TypeAgent:
 		return ProvenanceRuntimeReported
-	case TypeExec, TypeFile, TypeNet:
+	case TypeExec, TypeProcess, TypeFile, TypeNet:
 		return ProvenanceKernelObserved
 	case TypeDetection:
 		return ProvenanceDerived

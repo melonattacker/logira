@@ -321,6 +321,10 @@ func viewLegacy(runID, runDir string, meta runs.Meta, asJSON bool) error {
 		case storage.TypeExec:
 			d, _ := parseExecDetail(ev.DataJSON)
 			stdoutf("%s exec pid=%d ppid=%d %s argv=%v\n", ts, ev.PID, ev.PPID, d.Filename, d.Argv)
+		case storage.TypeProcess:
+			var d model.ProcessDetail
+			_ = json.Unmarshal(ev.DataJSON, &d)
+			stdoutf("%s process kind=%s tid=%d tgid=%d parent_tid=%d child_tid=%d old_pid=%d start_kernel_ns=%d\n", ts, d.Kind, d.TID, d.TGID, d.ParentTID, d.ChildTID, d.OldPID, d.TaskStartKernelNS)
 		case storage.TypeFile:
 			d, _ := parseFileDetail(ev.DataJSON)
 			stdoutf("%s file pid=%d op=%s path=%s\n", ts, ev.PID, d.Op, d.Path)

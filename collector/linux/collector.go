@@ -237,7 +237,7 @@ func (lc *LinuxCollector) recordForwardDrop(ev collector.Event) {
 	c, ok := lc.lossTargets[x.CgroupID]
 	if ok {
 		switch ev.Type {
-		case collector.EventTypeExec:
+		case collector.EventTypeExec, collector.EventTypeProcess:
 			c.Exec++
 		case collector.EventTypeFile:
 			c.File++

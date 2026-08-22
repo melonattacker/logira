@@ -105,8 +105,9 @@ func TestSessionQueueDropsOnlyEnabledStreams(t *testing.T) {
 	s := &session{enableExec: true, in: make(chan sessionMessage, 1), accepting: true}
 	s.enqueue(collector.Event{Type: collector.EventTypeExec})
 	s.enqueue(collector.Event{Type: collector.EventTypeExec})
+	s.enqueue(collector.Event{Type: collector.EventTypeProcess})
 	s.enqueue(collector.Event{Type: collector.EventTypeFile})
-	if got := s.queueDrops.exec.Load(); got != 1 {
+	if got := s.queueDrops.exec.Load(); got != 2 {
 		t.Fatalf("exec queue drops=%d", got)
 	}
 	if got := s.queueDrops.file.Load(); got != 0 {

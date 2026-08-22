@@ -34,27 +34,49 @@ type Config struct {
 }
 
 type rawExecEvent struct {
-	TSNS     uint64
-	CgroupID uint64
-	PID      uint32
-	PPID     uint32
-	UID      uint32
-	Comm     [16]byte
-	Filename [maxArgBytes]byte
-	Argc     uint32
-	Argv     [maxArgs][maxArgBytes]byte
+	TSNS                  uint64
+	CgroupID              uint64
+	PID                   uint32
+	PPID                  uint32
+	UID                   uint32
+	TID                   uint32
+	TGID                  uint32
+	OldPID                uint32
+	TaskStartKernelNS     uint64
+	FirstObservedKernelNS uint64
+	Comm                  [16]byte
+	Filename              [maxArgBytes]byte
+	Argc                  uint32
+	Argv                  [maxArgs][maxArgBytes]byte
+}
+
+type rawProcessEvent struct {
+	TSNS                    uint64
+	CgroupID                uint64
+	TaskStartKernelNS       uint64
+	ParentTaskStartKernelNS uint64
+	FirstObservedKernelNS   uint64
+	Kind                    uint32
+	TID                     uint32
+	TGID                    uint32
+	ParentTID               uint32
+	ParentTGID              uint32
+	ChildTID                uint32
+	ChildTGID               uint32
+	OldPID                  uint32
 }
 
 type Tracer struct {
 	cfg Config
 
-	mu      sync.Mutex
-	coll    *ebpf.Collection
-	links   []link.Link
-	reader  *ringbuf.Reader
-	out     chan collector.Event
-	runWG   sync.WaitGroup
-	started bool
+	mu            sync.Mutex
+	coll          *ebpf.Collection
+	links         []link.Link
+	reader        *ringbuf.Reader
+	processReader *ringbuf.Reader
+	out           chan collector.Event
+	runWG         sync.WaitGroup
+	started       bool
 }
 
 func NewTracer(cfg Config) *Tracer {
@@ -114,6 +136,18 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		coll.Close()
 		return nil, fmt.Errorf("new exec ringbuf reader: %w", err)
 	}
+	processEventsMap, ok := coll.Maps["process_events"]
+	if !ok {
+		_ = rdr.Close()
+		coll.Close()
+		return nil, fmt.Errorf("process events map not found")
+	}
+	processRdr, err := ringbuf.NewReader(processEventsMap)
+	if err != nil {
+		_ = rdr.Close()
+		coll.Close()
+		return nil, fmt.Errorf("new process ringbuf reader: %w", err)
+	}
 
 	attach := []struct {
 		group string
@@ -121,6 +155,8 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		prog  string
 	}{
 		{"sched", "sched_process_exec", "trace_sched_exec"},
+		{"sched", "sched_process_fork", "trace_sched_fork"},
+		{"sched", "sched_process_exit", "trace_sched_exit"},
 		{"syscalls", "sys_enter_execve", "trace_enter_execve"},
 		{"syscalls", "sys_enter_execveat", "trace_enter_execveat"},
 	}
@@ -130,6 +166,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		prog, ok := coll.Programs[a.prog]
 		if !ok {
 			_ = rdr.Close()
+			_ = processRdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("exec program %s not found", a.prog)
 		}
@@ -139,6 +176,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 				_ = l.Close()
 			}
 			_ = rdr.Close()
+			_ = processRdr.Close()
 			coll.Close()
 			return nil, fmt.Errorf("attach tracepoint %s/%s: %w", a.group, a.name, err)
 		}
@@ -149,20 +187,28 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	t.coll = coll
 	t.links = links
 	t.reader = rdr
+	t.processReader = processRdr
 	t.out = out
 	t.started = true
 
-	t.runWG.Add(1)
+	t.runWG.Add(2)
 	go func() {
 		defer t.runWG.Done()
-		defer close(out)
-		t.consume(ctx, out)
+		t.consumeExec(ctx, out)
+	}()
+	go func() {
+		defer t.runWG.Done()
+		t.consumeProcess(ctx, out)
+	}()
+	go func() {
+		t.runWG.Wait()
+		close(out)
 	}()
 
 	return out, nil
 }
 
-func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
+func (t *Tracer) consumeExec(ctx context.Context, out chan<- collector.Event) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -200,11 +246,16 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		detail := model.ExecDetail{
-			Filename:     cString(raw.Filename[:]),
-			Argv:         argv,
-			Comm:         cString(raw.Comm[:]),
-			KernelTimeNS: raw.TSNS,
-			CgroupID:     raw.CgroupID,
+			Filename:              cString(raw.Filename[:]),
+			Argv:                  argv,
+			Comm:                  cString(raw.Comm[:]),
+			KernelTimeNS:          raw.TSNS,
+			TID:                   int(raw.TID),
+			TGID:                  int(raw.TGID),
+			OldPID:                int(raw.OldPID),
+			TaskStartKernelNS:     raw.TaskStartKernelNS,
+			FirstObservedKernelNS: raw.FirstObservedKernelNS,
+			CgroupID:              raw.CgroupID,
 		}
 		b, err := json.Marshal(detail)
 		if err != nil {
@@ -222,6 +273,91 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 	}
 }
 
+func (t *Tracer) consumeProcess(ctx context.Context, out chan<- collector.Event) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		rec, err := t.processReader.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+
+		var raw rawProcessEvent
+		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+			continue
+		}
+		kind := processKind(raw.Kind)
+		if kind == "" {
+			continue
+		}
+		detail := model.ProcessDetail{
+			Kind:                    kind,
+			TID:                     int(raw.TID),
+			TGID:                    int(raw.TGID),
+			ParentTID:               int(raw.ParentTID),
+			ParentTGID:              int(raw.ParentTGID),
+			ChildTID:                int(raw.ChildTID),
+			ChildTGID:               int(raw.ChildTGID),
+			OldPID:                  int(raw.OldPID),
+			TaskStartKernelNS:       raw.TaskStartKernelNS,
+			ParentTaskStartKernelNS: raw.ParentTaskStartKernelNS,
+			FirstObservedKernelNS:   raw.FirstObservedKernelNS,
+			KernelTimeNS:            raw.TSNS,
+			CgroupID:                raw.CgroupID,
+		}
+		if kind == "fork" {
+			detail.CloneKind = "unknown"
+		}
+		if kind == "exit" {
+			detail.GroupDead = "unknown"
+		}
+		if kind == "fork" && raw.ChildTGID != 0 {
+			if raw.ChildTGID == raw.ParentTGID {
+				detail.CloneKind = "thread_clone"
+			} else {
+				detail.CloneKind = "process_fork"
+			}
+		}
+		b, err := json.Marshal(detail)
+		if err != nil {
+			continue
+		}
+		pid := int(raw.TGID)
+		ppid := 0
+		if kind == "fork" {
+			pid = int(raw.ChildTID)
+			ppid = int(raw.ParentTGID)
+		}
+		out <- collector.Event{
+			Type:      collector.EventTypeProcess,
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			PID:       pid,
+			PPID:      ppid,
+			Detail:    b,
+		}
+	}
+}
+
+func processKind(kind uint32) string {
+	switch kind {
+	case 1:
+		return "fork"
+	case 2:
+		return "exit"
+	case 3:
+		return "exec_rekey"
+	default:
+		return ""
+	}
+}
+
 func (t *Tracer) Stop(ctx context.Context) error {
 	t.mu.Lock()
 	if !t.started {
@@ -229,6 +365,7 @@ func (t *Tracer) Stop(ctx context.Context) error {
 		return nil
 	}
 	reader := t.reader
+	processReader := t.processReader
 	links := append([]link.Link{}, t.links...)
 	coll := t.coll
 	t.started = false
@@ -236,6 +373,9 @@ func (t *Tracer) Stop(ctx context.Context) error {
 
 	if reader != nil {
 		_ = reader.Close()
+	}
+	if processReader != nil {
+		_ = processReader.Close()
 	}
 	for _, l := range links {
 		_ = l.Close()

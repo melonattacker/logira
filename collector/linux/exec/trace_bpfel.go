@@ -62,15 +62,20 @@ type traceProgramSpecs struct {
 	TraceEnterExecve   *ebpf.ProgramSpec `ebpf:"trace_enter_execve"`
 	TraceEnterExecveat *ebpf.ProgramSpec `ebpf:"trace_enter_execveat"`
 	TraceSchedExec     *ebpf.ProgramSpec `ebpf:"trace_sched_exec"`
+	TraceSchedExit     *ebpf.ProgramSpec `ebpf:"trace_sched_exit"`
+	TraceSchedFork     *ebpf.ProgramSpec `ebpf:"trace_sched_fork"`
 }
 
 // traceMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type traceMapSpecs struct {
-	ArgvCacheMap *ebpf.MapSpec `ebpf:"argv_cache_map"`
-	Events       *ebpf.MapSpec `ebpf:"events"`
-	Scratch      *ebpf.MapSpec `ebpf:"scratch"`
+	ArgvCacheMap     *ebpf.MapSpec `ebpf:"argv_cache_map"`
+	Events           *ebpf.MapSpec `ebpf:"events"`
+	FirstObservedMap *ebpf.MapSpec `ebpf:"first_observed_map"`
+	ProcessEvents    *ebpf.MapSpec `ebpf:"process_events"`
+	Scratch          *ebpf.MapSpec `ebpf:"scratch"`
+	TaskStartMap     *ebpf.MapSpec `ebpf:"task_start_map"`
 }
 
 // traceObjects contains all objects after they have been loaded into the kernel.
@@ -92,16 +97,22 @@ func (o *traceObjects) Close() error {
 //
 // It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
 type traceMaps struct {
-	ArgvCacheMap *ebpf.Map `ebpf:"argv_cache_map"`
-	Events       *ebpf.Map `ebpf:"events"`
-	Scratch      *ebpf.Map `ebpf:"scratch"`
+	ArgvCacheMap     *ebpf.Map `ebpf:"argv_cache_map"`
+	Events           *ebpf.Map `ebpf:"events"`
+	FirstObservedMap *ebpf.Map `ebpf:"first_observed_map"`
+	ProcessEvents    *ebpf.Map `ebpf:"process_events"`
+	Scratch          *ebpf.Map `ebpf:"scratch"`
+	TaskStartMap     *ebpf.Map `ebpf:"task_start_map"`
 }
 
 func (m *traceMaps) Close() error {
 	return _TraceClose(
 		m.ArgvCacheMap,
 		m.Events,
+		m.FirstObservedMap,
+		m.ProcessEvents,
 		m.Scratch,
+		m.TaskStartMap,
 	)
 }
 
@@ -112,6 +123,8 @@ type tracePrograms struct {
 	TraceEnterExecve   *ebpf.Program `ebpf:"trace_enter_execve"`
 	TraceEnterExecveat *ebpf.Program `ebpf:"trace_enter_execveat"`
 	TraceSchedExec     *ebpf.Program `ebpf:"trace_sched_exec"`
+	TraceSchedExit     *ebpf.Program `ebpf:"trace_sched_exit"`
+	TraceSchedFork     *ebpf.Program `ebpf:"trace_sched_fork"`
 }
 
 func (p *tracePrograms) Close() error {
@@ -119,6 +132,8 @@ func (p *tracePrograms) Close() error {
 		p.TraceEnterExecve,
 		p.TraceEnterExecveat,
 		p.TraceSchedExec,
+		p.TraceSchedExit,
+		p.TraceSchedFork,
 	)
 }
 

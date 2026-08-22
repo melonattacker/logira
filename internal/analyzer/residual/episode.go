@@ -38,12 +38,27 @@ type ExecMember struct {
 	CWD           string         `json:"cwd,omitempty"`
 }
 
+// ProcessMember is a kernel task instance. It may have no exec observation;
+// in that case no synthetic exec sequence or generation is assigned.
+type ProcessMember struct {
+	TID                     int    `json:"tid"`
+	TGID                    int    `json:"tgid,omitempty"`
+	TaskStartKernelNS       uint64 `json:"task_start_kernel_ns,omitempty"`
+	ParentTID               int    `json:"parent_tid,omitempty"`
+	ParentTGID              int    `json:"parent_tgid,omitempty"`
+	ParentTaskStartKernelNS uint64 `json:"parent_task_start_kernel_ns,omitempty"`
+	ForkSeq                 int64  `json:"fork_seq,omitempty"`
+	ExitSeq                 int64  `json:"exit_seq,omitempty"`
+	CloneKind               string `json:"clone_kind"`
+	GroupDead               string `json:"group_dead"`
+}
+
 type FileEffect struct {
 	Seq               int64  `json:"seq"`
 	TS                int64  `json:"ts"`
 	PID               int    `json:"pid"`
-	ProcessExecSeq    int64  `json:"process_exec_seq"`
-	ProcessGeneration int    `json:"process_generation"`
+	ProcessExecSeq    int64  `json:"process_exec_seq,omitempty"`
+	ProcessGeneration int    `json:"process_generation,omitempty"`
 	Attribution       string `json:"attribution"`
 	Op                string `json:"op"`
 	Path              string `json:"path"`
@@ -54,8 +69,8 @@ type NetworkEffect struct {
 	Seq               int64  `json:"seq"`
 	TS                int64  `json:"ts"`
 	PID               int    `json:"pid"`
-	ProcessExecSeq    int64  `json:"process_exec_seq"`
-	ProcessGeneration int    `json:"process_generation"`
+	ProcessExecSeq    int64  `json:"process_exec_seq,omitempty"`
+	ProcessGeneration int    `json:"process_generation,omitempty"`
 	Attribution       string `json:"attribution"`
 	Op                string `json:"op"`
 	Proto             string `json:"proto,omitempty"`
@@ -71,6 +86,7 @@ type EpisodeSummary struct {
 	TransitiveExecs int `json:"transitive_execs"`
 	Files           int `json:"files"`
 	Networks        int `json:"networks"`
+	Processes       int `json:"processes"`
 }
 
 // ExecutionEpisode is an observed causal envelope around one matched runtime
@@ -85,6 +101,7 @@ type ExecutionEpisode struct {
 	Confidence        string          `json:"confidence"`
 	DirectMatch       ExecMember      `json:"direct_match"`
 	ExecMembers       []ExecMember    `json:"exec_members"`
+	ProcessMembers    []ProcessMember `json:"process_members,omitempty"`
 	FileEffects       []FileEffect    `json:"file_effects,omitempty"`
 	NetworkEffects    []NetworkEffect `json:"network_effects,omitempty"`
 	Summary           EpisodeSummary  `json:"summary"`
@@ -96,7 +113,7 @@ type ExecutionEpisode struct {
 	AttributionIssues []string        `json:"attribution_issues,omitempty"`
 }
 
-func buildExecutionEpisode(meta runs.Meta, action commandAction, anchor int, confidence string, execs []execEvent, members map[int]bool, events []storage.Event) ExecutionEpisode {
+func buildExecutionEpisode(meta runs.Meta, action commandAction, anchor int, confidence string, execs []execEvent, members map[int]bool, events []storage.Event, processes *processGraph) ExecutionEpisode {
 	actionID := action.itemID
 	if actionID == "" {
 		actionID = fmt.Sprintf("agent-seq:%d", action.seq)
@@ -173,7 +190,9 @@ func buildExecutionEpisode(meta runs.Meta, action commandAction, anchor int, con
 		episode.AttributionIssues = append(episode.AttributionIssues, "network capture is not complete; attributed network effects may be incomplete")
 	}
 
-	attachEpisodeEffects(&episode, action, execs, members, events)
+	processMembers, processTasks := processes.episodeProcessMembers(execs, members, action)
+	episode.ProcessMembers = processMembers
+	attachEpisodeEffects(&episode, action, execs, members, processTasks, events, processes)
 	wrappers, transitive := 0, 0
 	for _, member := range episode.ExecMembers {
 		switch member.Role {
@@ -190,6 +209,7 @@ func buildExecutionEpisode(meta runs.Meta, action commandAction, anchor int, con
 		TransitiveExecs: transitive,
 		Files:           len(episode.FileEffects),
 		Networks:        len(episode.NetworkEffects),
+		Processes:       len(episode.ProcessMembers),
 	}
 	return episode
 }
@@ -222,7 +242,7 @@ func isAncestorExec(candidate, child int, execs []execEvent, members map[int]boo
 	return false
 }
 
-func attachEpisodeEffects(episode *ExecutionEpisode, action commandAction, execs []execEvent, members map[int]bool, events []storage.Event) {
+func attachEpisodeEffects(episode *ExecutionEpisode, action commandAction, execs []execEvent, members map[int]bool, processTasks map[taskIdentity]bool, events []storage.Event, processes *processGraph) {
 	const skew = int64(5_000_000_000)
 	windowStart, windowEnd := action.start-skew, action.end+skew
 	for _, ev := range events {
@@ -230,6 +250,8 @@ func attachEpisodeEffects(episode *ExecutionEpisode, action commandAction, execs
 			continue
 		}
 		pid := ev.PID
+		var identity taskIdentity
+		var kernelNS uint64
 		var fileDetail model.FileDetail
 		var netDetail model.NetDetail
 		switch ev.Type {
@@ -240,29 +262,50 @@ func attachEpisodeEffects(episode *ExecutionEpisode, action commandAction, execs
 			if pid == 0 {
 				pid = fileDetail.PID
 			}
+			identity = taskIdentity{tid: fileDetail.TID, start: fileDetail.TaskStartKernelNS}
+			kernelNS = fileDetail.KernelTimeNS
 		case storage.TypeNet:
 			if json.Unmarshal(ev.DataJSON, &netDetail) != nil {
 				continue
 			}
+			identity = taskIdentity{tid: netDetail.TID, start: netDetail.TaskStartKernelNS}
+			kernelNS = netDetail.KernelTimeNS
 		}
 		if pid <= 0 {
 			continue
 		}
-		execIndex := latestExecGeneration(execs, pid, ev.TS, ev.Seq)
-		if execIndex < 0 || !members[execIndex] {
+		if identity.tid <= 0 {
+			identity.tid = pid
+		}
+		if identity.start == 0 {
+			if fork := processes.forkForChild(identity, kernelNS); fork != nil {
+				identity.start = fork.child.start
+			}
+		}
+		execIndex := latestExecGeneration(execs, identity, ev.TS, ev.Seq, kernelNS)
+		if execIndex >= 0 && !members[execIndex] {
+			execIndex = -1
+		}
+		if execIndex < 0 && !processTasks[identity] {
 			continue
+		}
+		processExecSeq, processGeneration, attribution := int64(0), 0, "task_instance_no_exec"
+		if execIndex >= 0 {
+			processExecSeq = execs[execIndex].ev.Seq
+			processGeneration = execs[execIndex].generation
+			attribution = "task_instance_latest_exec_generation"
 		}
 		switch ev.Type {
 		case storage.TypeFile:
 			episode.FileEffects = append(episode.FileEffects, FileEffect{
-				Seq: ev.Seq, TS: ev.TS, PID: pid, ProcessExecSeq: execs[execIndex].ev.Seq,
-				ProcessGeneration: execs[execIndex].generation, Attribution: "pid_latest_exec_generation",
+				Seq: ev.Seq, TS: ev.TS, PID: pid, ProcessExecSeq: processExecSeq,
+				ProcessGeneration: processGeneration, Attribution: attribution,
 				Op: strings.TrimSpace(fileDetail.Op), Path: fileDetail.Path, Summary: ev.Summary,
 			})
 		case storage.TypeNet:
 			episode.NetworkEffects = append(episode.NetworkEffects, NetworkEffect{
-				Seq: ev.Seq, TS: ev.TS, PID: pid, ProcessExecSeq: execs[execIndex].ev.Seq,
-				ProcessGeneration: execs[execIndex].generation, Attribution: "pid_latest_exec_generation",
+				Seq: ev.Seq, TS: ev.TS, PID: pid, ProcessExecSeq: processExecSeq,
+				ProcessGeneration: processGeneration, Attribution: attribution,
 				Op: strings.TrimSpace(netDetail.Op), Proto: netDetail.Proto, DstIP: netDetail.DstIP,
 				DstPort: netDetail.DstPort, Bytes: netDetail.Bytes, Summary: ev.Summary,
 			})
@@ -270,13 +313,16 @@ func attachEpisodeEffects(episode *ExecutionEpisode, action commandAction, execs
 	}
 }
 
-func latestExecGeneration(execs []execEvent, pid int, ts, seq int64) int {
+func latestExecGeneration(execs []execEvent, identity taskIdentity, ts, seq int64, kernelNS uint64) int {
 	latest := -1
 	for i, ex := range execs {
 		if ex.ev.TS > ts || (ex.ev.TS == ts && ex.ev.Seq > seq) {
 			break
 		}
-		if ex.ev.PID == pid {
+		if ex.identity == identity || (identity.start == 0 && ex.identity.tid == identity.tid) {
+			if kernelNS != 0 && ex.detail.KernelTimeNS != 0 && ex.detail.KernelTimeNS > kernelNS {
+				continue
+			}
 			latest = i
 		}
 	}

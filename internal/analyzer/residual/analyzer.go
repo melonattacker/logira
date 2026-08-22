@@ -50,6 +50,7 @@ type commandAction struct {
 type execEvent struct {
 	ev         storage.Event
 	detail     model.ExecDetail
+	identity   taskIdentity
 	generation int
 	parent     int
 }
@@ -57,7 +58,8 @@ type execEvent struct {
 func Analyze(meta runs.Meta, events []storage.Event) Report {
 	report := Report{RunID: meta.RunID, Counts: make(map[Classification]int)}
 	commands := collectCommands(events)
-	execs := collectExecs(events)
+	processes := collectProcessGraph(events)
+	execs := collectExecs(events, processes)
 	launchers := launcherExecs(meta, events, execs, commands)
 	used := make(map[int]bool)
 
@@ -71,7 +73,7 @@ func Analyze(meta runs.Meta, events []storage.Event) Report {
 				reason += "; runtime status declined conflicts with observed execution"
 			}
 			report.add(Finding{Classification: Matched, Confidence: confidence, Reason: reason, ItemID: command.itemID, Command: command.command, AgentSeq: command.seq, ExecSeq: root.ev.Seq, PID: root.ev.PID, ExecSummary: root.ev.Summary})
-			report.Episodes = append(report.Episodes, buildExecutionEpisode(meta, command, idx, confidence, execs, episodeMembers, events))
+			report.Episodes = append(report.Episodes, buildExecutionEpisode(meta, command, idx, confidence, execs, episodeMembers, events, processes))
 			continue
 		}
 		if strings.EqualFold(command.status, "declined") {
@@ -138,7 +140,7 @@ func collectCommands(events []storage.Event) []commandAction {
 	return out
 }
 
-func collectExecs(events []storage.Event) []execEvent {
+func collectExecs(events []storage.Event, processes *processGraph) []execEvent {
 	var out []execEvent
 	for _, ev := range events {
 		if ev.Type != storage.TypeExec {
@@ -146,7 +148,7 @@ func collectExecs(events []storage.Event) []execEvent {
 		}
 		var d model.ExecDetail
 		_ = json.Unmarshal(ev.DataJSON, &d)
-		out = append(out, execEvent{ev: ev, detail: d, parent: -1})
+		out = append(out, execEvent{ev: ev, detail: d, identity: processes.identityForExec(d, ev), parent: -1})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].ev.TS == out[j].ev.TS {
@@ -154,20 +156,32 @@ func collectExecs(events []storage.Event) []execEvent {
 		}
 		return out[i].ev.TS < out[j].ev.TS
 	})
-	lastByPID := make(map[int]int)
-	generations := make(map[int]int)
+	lastByTask := make(map[taskIdentity]int)
+	lastByTID := make(map[int]int)
+	generations := make(map[taskIdentity]int)
 	for i := range out {
 		ex := &out[i]
-		generations[ex.ev.PID]++
-		ex.generation = generations[ex.ev.PID]
-		if previous, ok := lastByPID[ex.ev.PID]; ok {
+		identity := ex.identity
+		previousIdentity := identity
+		if ex.detail.OldPID > 0 && ex.detail.OldPID != identity.tid {
+			previousIdentity.tid = ex.detail.OldPID
+		}
+		if previous, ok := lastByTask[previousIdentity]; ok {
 			// An exec replacement is the next generation of the same process,
 			// not a reason to apply the previous generation's classification.
 			ex.parent = previous
-		} else if parent, ok := lastByPID[ex.ev.PPID]; ok && ex.ev.PPID > 0 {
+			generations[identity] = generations[previousIdentity]
+		} else if parent := processes.nearestExecParent(identity, ex.detail.KernelTimeNS, lastByTask, lastByTID); parent >= 0 {
+			ex.parent = parent
+		} else if parent, ok := lastByTID[ex.ev.PPID]; ok && ex.ev.PPID > 0 {
+			// Version 4 and older runs have no process lifecycle stream.
 			ex.parent = parent
 		}
-		lastByPID[ex.ev.PID] = i
+		generations[identity]++
+		ex.generation = generations[identity]
+		lastByTask[identity] = i
+		lastByTID[identity.tid] = i
+		processes.observeExec(identity, ex.detail)
 	}
 	return out
 }
