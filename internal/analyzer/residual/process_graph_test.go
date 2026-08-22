@@ -13,9 +13,10 @@ func TestForkOnlyTaskChainConnectsExecutionEpisode(t *testing.T) {
 		processEvent(2, 11, model.ProcessDetail{Kind: "fork", ParentTID: 10, ParentTGID: 10, ChildTID: 20, TaskStartKernelNS: 200, KernelTimeNS: 200}),
 		{RunID: "r", Seq: 3, TS: 12, Type: storage.TypeExec, PID: 20, Summary: "exec make test", DataJSON: mustJSON(model.ExecDetail{Filename: "/usr/bin/make", Argv: []string{"make", "test"}, TID: 20, TGID: 20, TaskStartKernelNS: 200, KernelTimeNS: 210})},
 		processEvent(4, 13, model.ProcessDetail{Kind: "fork", ParentTID: 20, ParentTGID: 20, ParentTaskStartKernelNS: 200, ChildTID: 21, TaskStartKernelNS: 300, KernelTimeNS: 300}),
-		processEvent(5, 14, model.ProcessDetail{Kind: "fork", ParentTID: 21, ParentTGID: 21, ParentTaskStartKernelNS: 300, ChildTID: 22, TaskStartKernelNS: 400, KernelTimeNS: 400}),
-		{RunID: "r", Seq: 6, TS: 15, Type: storage.TypeExec, PID: 22, PPID: 999, Summary: "exec child", DataJSON: mustJSON(model.ExecDetail{Filename: "/tmp/child", Argv: []string{"child"}, TID: 22, TGID: 22, TaskStartKernelNS: 400, KernelTimeNS: 410})},
-		event(7, 16, storage.TypeAgent, model.AgentDetail{Kind: "command_execution", ItemID: "item_1", Command: "make test", Status: "completed"}),
+		{RunID: "r", Seq: 5, TS: 14, Type: storage.TypeFile, PID: 21, Summary: "file create /tmp/fork-only", DataJSON: mustJSON(model.FileDetail{PID: 21, TID: 21, TGID: 21, TaskStartKernelNS: 300, KernelTimeNS: 350, Op: "create", Path: "/tmp/fork-only"})},
+		processEvent(6, 15, model.ProcessDetail{Kind: "fork", ParentTID: 21, ParentTGID: 21, ParentTaskStartKernelNS: 300, ChildTID: 22, TaskStartKernelNS: 400, KernelTimeNS: 400}),
+		{RunID: "r", Seq: 7, TS: 16, Type: storage.TypeExec, PID: 22, PPID: 999, Summary: "exec child", DataJSON: mustJSON(model.ExecDetail{Filename: "/tmp/child", Argv: []string{"child"}, TID: 22, TGID: 22, TaskStartKernelNS: 400, KernelTimeNS: 410})},
+		event(8, 17, storage.TypeAgent, model.AgentDetail{Kind: "command_execution", ItemID: "item_1", Command: "make test", Status: "completed"}),
 	}
 
 	r := Analyze(completeMeta(), events)
@@ -28,6 +29,37 @@ func TestForkOnlyTaskChainConnectsExecutionEpisode(t *testing.T) {
 	}
 	if episode.Summary.Processes != 3 {
 		t.Fatalf("process members=%+v summary=%+v", episode.ProcessMembers, episode.Summary)
+	}
+	if len(episode.FileEffects) != 1 || episode.FileEffects[0].Attribution != "task_instance_no_exec" || episode.FileEffects[0].Path != "/tmp/fork-only" {
+		t.Fatalf("fork-only task effect was not retained: %+v", episode.FileEffects)
+	}
+}
+
+func TestEpisodeDoesNotAttributeLauncherAncestorEffects(t *testing.T) {
+	events := []storage.Event{
+		processEvent(1, 1, model.ProcessDetail{Kind: "fork", ParentTID: 1, ParentTGID: 1, ChildTID: 10, ChildTGID: 10, TaskStartKernelNS: 100, KernelTimeNS: 100}),
+		{RunID: "r", Seq: 2, TS: 2, Type: storage.TypeExec, PID: 10, Summary: "exec codex", DataJSON: mustJSON(model.ExecDetail{Filename: "/usr/bin/codex", TID: 10, TGID: 10, TaskStartKernelNS: 100, KernelTimeNS: 110})},
+		{RunID: "r", Seq: 3, TS: 9, Type: storage.TypeNet, PID: 10, Summary: "net launcher", DataJSON: mustJSON(model.NetDetail{Op: "connect", Proto: "tcp", DstIP: "192.0.2.1", DstPort: 443, TID: 10, TGID: 10, TaskStartKernelNS: 100, KernelTimeNS: 190})},
+		event(4, 10, storage.TypeAgent, model.AgentDetail{Kind: "command_execution", ItemID: "item_1", Command: "bash -c 'echo hi'", Status: "in_progress"}),
+		processEvent(5, 11, model.ProcessDetail{Kind: "fork", ParentTID: 10, ParentTGID: 10, ParentTaskStartKernelNS: 100, ChildTID: 20, ChildTGID: 20, TaskStartKernelNS: 200, KernelTimeNS: 200}),
+		{RunID: "r", Seq: 6, TS: 12, Type: storage.TypeExec, PID: 20, Summary: "exec bwrap", DataJSON: mustJSON(model.ExecDetail{Filename: "/usr/bin/bwrap", Argv: []string{"bwrap", "--", "bash", "-c", "echo hi"}, TID: 20, TGID: 20, TaskStartKernelNS: 200, KernelTimeNS: 210})},
+		{RunID: "r", Seq: 7, TS: 13, Type: storage.TypeExec, PID: 20, Summary: "exec bash", DataJSON: mustJSON(model.ExecDetail{Filename: "/bin/bash", Argv: []string{"bash", "-c", "echo hi"}, TID: 20, TGID: 20, TaskStartKernelNS: 200, KernelTimeNS: 220})},
+		{RunID: "r", Seq: 8, TS: 14, Type: storage.TypeNet, PID: 20, Summary: "net command", DataJSON: mustJSON(model.NetDetail{Op: "connect", Proto: "tcp", DstIP: "127.0.0.1", DstPort: 18080, TID: 20, TGID: 20, TaskStartKernelNS: 200, KernelTimeNS: 230})},
+		event(9, 15, storage.TypeAgent, model.AgentDetail{Kind: "command_execution", ItemID: "item_1", Command: "bash -c 'echo hi'", Status: "completed"}),
+	}
+
+	r := Analyze(completeMeta(), events)
+	if len(r.Episodes) != 1 {
+		t.Fatalf("report=%+v", r)
+	}
+	episode := r.Episodes[0]
+	if len(episode.NetworkEffects) != 1 || episode.NetworkEffects[0].DstPort != 18080 || episode.NetworkEffects[0].PID != 20 {
+		t.Fatalf("launcher effect leaked into episode: %+v", episode.NetworkEffects)
+	}
+	for _, member := range episode.ProcessMembers {
+		if member.TID == 10 {
+			t.Fatalf("launcher ancestor became an episode process member: %+v", episode.ProcessMembers)
+		}
 	}
 }
 

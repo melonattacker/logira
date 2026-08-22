@@ -210,6 +210,11 @@ func (g *processGraph) episodeProcessMembers(execs []execEvent, execMembers map[
 		included[execs[i].identity] = true
 	}
 
+	// Effect ownership expands only from correlated exec members toward their
+	// observed descendants. Walking upward would make the long-lived Codex
+	// launcher an episode member and absorb its unrelated API/file activity.
+	// Fork-only intermediates remain included because the downward traversal
+	// reaches them before any later descendant exec.
 	changed := true
 	for changed {
 		changed = false
@@ -219,13 +224,6 @@ func (g *processGraph) episodeProcessMembers(execs []execEvent, execMembers map[
 			}
 			if included[node.parent] {
 				included[identity] = true
-				changed = true
-			}
-		}
-		for identity := range included {
-			node := g.nodes[identity]
-			if node != nil && node.parent.tid > 0 && g.nodes[node.parent] != nil && !included[node.parent] {
-				included[node.parent] = true
 				changed = true
 			}
 		}
