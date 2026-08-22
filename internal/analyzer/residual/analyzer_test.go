@@ -19,6 +19,8 @@ func completeMeta() runs.Meta {
 	return runs.Meta{RunID: "r", CommandArgv: []string{"codex", "exec", "--json"}, Coverage: runs.Coverage{
 		Agent:   runs.AgentCoverage{Capture: "complete", Interpretation: "complete"},
 		Process: runs.KernelCoverage{Availability: "available", Capture: "complete"},
+		File:    runs.KernelCoverage{Availability: "available", Capture: "complete"},
+		Network: runs.KernelCoverage{Availability: "available", Capture: "complete"},
 	}}
 }
 

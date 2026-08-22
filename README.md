@@ -143,6 +143,8 @@ or user intent:
 ./logira query last --type agent
 ./logira view last --raw
 ./logira residual last
+./logira residual last --effects
+./logira residual last --effects --verbose
 ```
 
 V0 requires the explicit `codex exec --json` command shape; flags are not
@@ -150,6 +152,12 @@ injected and shell wrappers are not accepted. Residual findings are
 `MATCHED`, `REPORTED_NOT_OBSERVED`, `OBSERVED_NOT_REPORTED`, `BLOCKED`, or
 `UNOBSERVABLE`. Known Logira-side telemetry loss is shown in run coverage and
 prevents absence from being treated as a meaningful mismatch.
+
+`--effects` inspects the structurally attributed execution episode behind each
+`MATCHED` action, including wrappers, exec replacements, descendants, and
+retained file/network effects. Episode membership establishes causal
+attribution only; it does not label an effect expected, suspicious, or
+semantically justified.
 
 Run Claude Code CLI:
 
@@ -190,7 +198,7 @@ Query events:
 - `logira view [last|<run-id>]`: run dashboard (use `--raw` for legacy text)
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
-- `logira residual [last|<run-id>]`: experimental runtime-to-kernel consistency report for agent-enabled runs
+- `logira residual [last|<run-id>] [--effects [--verbose]]`: experimental runtime-to-kernel consistency report and optional execution-episode inspection for agent-enabled runs
 
 Rules:
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)

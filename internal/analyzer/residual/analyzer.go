@@ -39,6 +39,7 @@ type Report struct {
 	RunID    string                 `json:"run_id"`
 	Findings []Finding              `json:"findings"`
 	Counts   map[Classification]int `json:"counts"`
+	Episodes []ExecutionEpisode     `json:"episodes,omitempty"`
 }
 
 type commandAction struct {
@@ -63,13 +64,14 @@ func Analyze(meta runs.Meta, events []storage.Event) Report {
 	for _, command := range commands {
 		idx, confidence, ambiguous := bestCandidate(meta, command, execs, used, launchers)
 		if idx >= 0 && !ambiguous {
-			episodeSize := attributeEpisode(command, idx, execs, used)
+			episodeMembers := attributeEpisode(command, idx, execs, used)
 			root := execs[idx]
-			reason := fmt.Sprintf("runtime command correlated with kernel exec; execution episode contains %d exec observation(s)", episodeSize)
+			reason := fmt.Sprintf("runtime command correlated with kernel exec; execution episode contains %d exec observation(s)", len(episodeMembers))
 			if strings.EqualFold(command.status, "declined") {
 				reason += "; runtime status declined conflicts with observed execution"
 			}
 			report.add(Finding{Classification: Matched, Confidence: confidence, Reason: reason, ItemID: command.itemID, Command: command.command, AgentSeq: command.seq, ExecSeq: root.ev.Seq, PID: root.ev.PID, ExecSummary: root.ev.Summary})
+			report.Episodes = append(report.Episodes, buildExecutionEpisode(meta, command, idx, confidence, execs, episodeMembers, events))
 			continue
 		}
 		if strings.EqualFold(command.status, "declined") {
@@ -249,7 +251,7 @@ func lifecycleDistance(ts, start, end int64) int64 {
 	return 0
 }
 
-func attributeEpisode(action commandAction, anchor int, execs []execEvent, used map[int]bool) int {
+func attributeEpisode(action commandAction, anchor int, execs []execEvent, used map[int]bool) map[int]bool {
 	const skew = int64(5_000_000_000)
 	windowStart, windowEnd := action.start-skew, action.end+skew
 	episode := map[int]bool{anchor: true}
@@ -279,7 +281,7 @@ func attributeEpisode(action commandAction, anchor int, execs []execEvent, used 
 	for i := range episode {
 		used[i] = true
 	}
-	return len(episode)
+	return episode
 }
 
 func episodeHasChild(episode map[int]bool, execs []execEvent, parent int) bool {
