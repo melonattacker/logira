@@ -12,6 +12,7 @@ import (
 
 	agentcodex "github.com/melonattacker/logira/internal/agent/codex"
 	"github.com/melonattacker/logira/internal/ipc"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 type codexStreamResult struct {
@@ -45,6 +46,12 @@ func validateAgentCommand(provider string, argv []string) error {
 }
 
 func consumeCodexJSONL(ctx context.Context, src io.Reader, passthrough io.Writer, sessionID string) codexStreamResult {
+	return consumeCodexJSONLWithAppender(ctx, src, passthrough, sessionID, ipc.AppendAgentEvent)
+}
+
+type appendAgentEventFunc func(context.Context, string, model.AgentDetail) error
+
+func consumeCodexJSONLWithAppender(ctx context.Context, src io.Reader, passthrough io.Writer, sessionID string, appendEvent appendAgentEventFunc) codexStreamResult {
 	result := codexStreamResult{Stats: ipc.AgentTelemetryStats{Capture: "complete", Interpretation: "complete"}}
 	reader := bufio.NewReaderSize(src, 64*1024)
 	var warnings []error
@@ -72,7 +79,7 @@ func consumeCodexJSONL(ctx context.Context, src io.Reader, passthrough io.Writer
 					result.Stats.RawTruncated++
 				}
 				appendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				appendErr := ipc.AppendAgentEvent(appendCtx, sessionID, parsed.Detail)
+				appendErr := appendEvent(appendCtx, sessionID, parsed.Detail)
 				cancel()
 				if appendErr != nil {
 					result.Stats.AppendFailures++

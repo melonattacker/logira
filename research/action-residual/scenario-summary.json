@@ -1,0 +1,2896 @@
+{
+  "bash_pipeline": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "tr"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001362,
+          0.001721,
+          0.002046,
+          0.002188,
+          0.013118
+        ],
+        "max": 0.013118,
+        "median": 0.002046,
+        "min": 0.001362
+      },
+      "exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_create_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "file_modify_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "process_member_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "git_diff_stat": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "git"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.000839,
+          0.001222,
+          0.001424,
+          0.001452,
+          0.001556
+        ],
+        "max": 0.001556,
+        "median": 0.001424,
+        "min": 0.000839
+      },
+      "exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_create_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          33
+        ],
+        "max": 33,
+        "median": 33,
+        "min": 33
+      },
+      "file_modify_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "process_member_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          31
+        ],
+        "max": 31,
+        "median": 31,
+        "min": 31
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "git_hook_control": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "git"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001066,
+          0.00209,
+          0.002156
+        ],
+        "max": 0.002156,
+        "median": 0.00209,
+        "min": 0.001066
+      },
+      "exec_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          8
+        ],
+        "max": 8,
+        "median": 8,
+        "min": 8
+      },
+      "file_delete_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "file_effect_count": {
+        "distinct": [
+          54
+        ],
+        "max": 54,
+        "median": 54,
+        "min": 54
+      },
+      "file_modify_count": {
+        "distinct": [
+          6
+        ],
+        "max": 6,
+        "median": 6,
+        "min": 6
+      },
+      "file_rename_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          54
+        ],
+        "max": 54,
+        "median": 54,
+        "min": 54
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "git_hook_effect": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "git",
+        "pre-commit"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.00104,
+          0.001273,
+          0.001462
+        ],
+        "max": 0.001462,
+        "median": 0.001273,
+        "min": 0.00104
+      },
+      "exec_count": {
+        "distinct": [
+          5
+        ],
+        "max": 5,
+        "median": 5,
+        "min": 5
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_create_count": {
+        "distinct": [
+          9
+        ],
+        "max": 9,
+        "median": 9,
+        "min": 9
+      },
+      "file_delete_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "file_effect_count": {
+        "distinct": [
+          58
+        ],
+        "max": 58,
+        "median": 58,
+        "min": 58
+      },
+      "file_modify_count": {
+        "distinct": [
+          7
+        ],
+        "max": 7,
+        "median": 7,
+        "min": 7
+      },
+      "file_rename_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          58
+        ],
+        "max": 58,
+        "median": 58,
+        "min": 58
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "git_status": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "git"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.000857,
+          0.001321,
+          0.00158,
+          0.001612,
+          0.01639
+        ],
+        "max": 0.01639,
+        "median": 0.00158,
+        "min": 0.000857
+      },
+      "exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_create_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_delete_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_effect_count": {
+        "distinct": [
+          73
+        ],
+        "max": 73,
+        "median": 73,
+        "min": 73
+      },
+      "file_modify_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "process_member_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          71
+        ],
+        "max": 71,
+        "median": 71,
+        "min": 71
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "go_test": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "cli.test",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "logirad.test",
+        "vet"
+      ],
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "vet"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.605811,
+          0.663902,
+          0.670348,
+          0.682757,
+          2.437893
+        ],
+        "max": 2.437893,
+        "median": 0.670348,
+        "min": 0.605811
+      },
+      "exec_count": {
+        "distinct": [
+          37,
+          38,
+          39,
+          53
+        ],
+        "max": 53,
+        "median": 38,
+        "min": 37
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          97,
+          187
+        ],
+        "max": 187,
+        "median": 97,
+        "min": 97
+      },
+      "file_delete_count": {
+        "distinct": [
+          260,
+          359
+        ],
+        "max": 359,
+        "median": 260,
+        "min": 260
+      },
+      "file_effect_count": {
+        "distinct": [
+          1177,
+          3251
+        ],
+        "max": 3251,
+        "median": 1177,
+        "min": 1177
+      },
+      "file_modify_count": {
+        "distinct": [
+          108,
+          1876
+        ],
+        "max": 1876,
+        "median": 108,
+        "min": 108
+      },
+      "file_rename_count": {
+        "distinct": [
+          0,
+          2
+        ],
+        "max": 2,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          150,
+          151,
+          153,
+          222
+        ],
+        "max": 222,
+        "median": 153,
+        "min": 150
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          7,
+          8
+        ],
+        "max": 8,
+        "median": 7,
+        "min": 7
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          465,
+          2424
+        ],
+        "max": 2424,
+        "median": 465,
+        "min": 465
+      },
+      "process_member_count": {
+        "distinct": [
+          186,
+          189,
+          190,
+          274
+        ],
+        "max": 274,
+        "median": 189,
+        "min": 186
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          36,
+          37,
+          38,
+          52
+        ],
+        "max": 52,
+        "median": 37,
+        "min": 36
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          712,
+          827
+        ],
+        "max": 827,
+        "median": 712,
+        "min": 712
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "make_control": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "make",
+        "sh",
+        "uname",
+        "vet"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          1.078559,
+          1.215248,
+          1.248494
+        ],
+        "max": 1.248494,
+        "median": 1.215248,
+        "min": 1.078559
+      },
+      "exec_count": {
+        "distinct": [
+          43,
+          46
+        ],
+        "max": 46,
+        "median": 43,
+        "min": 43
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          101
+        ],
+        "max": 101,
+        "median": 101,
+        "min": 101
+      },
+      "file_delete_count": {
+        "distinct": [
+          262
+        ],
+        "max": 262,
+        "median": 262,
+        "min": 262
+      },
+      "file_effect_count": {
+        "distinct": [
+          3888,
+          3890
+        ],
+        "max": 3890,
+        "median": 3890,
+        "min": 3888
+      },
+      "file_modify_count": {
+        "distinct": [
+          113
+        ],
+        "max": 113,
+        "median": 113,
+        "min": 113
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          153,
+          155,
+          168
+        ],
+        "max": 168,
+        "median": 155,
+        "min": 153
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          9,
+          10
+        ],
+        "max": 10,
+        "median": 10,
+        "min": 9
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          401
+        ],
+        "max": 401,
+        "median": 401,
+        "min": 401
+      },
+      "process_member_count": {
+        "distinct": [
+          195,
+          197,
+          213
+        ],
+        "max": 213,
+        "median": 197,
+        "min": 195
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          42,
+          45
+        ],
+        "max": 45,
+        "median": 42,
+        "min": 42
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          3487,
+          3489
+        ],
+        "max": 3489,
+        "median": 3489,
+        "min": 3487
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "make_side_effect": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "make",
+        "sh",
+        "uname",
+        "vet"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          1.147161,
+          1.147836,
+          1.208251
+        ],
+        "max": 1.208251,
+        "median": 1.147836,
+        "min": 1.147161
+      },
+      "exec_count": {
+        "distinct": [
+          46,
+          47
+        ],
+        "max": 47,
+        "median": 46,
+        "min": 46
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          102
+        ],
+        "max": 102,
+        "median": 102,
+        "min": 102
+      },
+      "file_delete_count": {
+        "distinct": [
+          262
+        ],
+        "max": 262,
+        "median": 262,
+        "min": 262
+      },
+      "file_effect_count": {
+        "distinct": [
+          3890,
+          3891,
+          3892
+        ],
+        "max": 3892,
+        "median": 3891,
+        "min": 3890
+      },
+      "file_modify_count": {
+        "distinct": [
+          114
+        ],
+        "max": 114,
+        "median": 114,
+        "min": 114
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          155,
+          158,
+          159
+        ],
+        "max": 159,
+        "median": 158,
+        "min": 155
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          9
+        ],
+        "max": 9,
+        "median": 9,
+        "min": 9
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          401
+        ],
+        "max": 401,
+        "median": 401,
+        "min": 401
+      },
+      "process_member_count": {
+        "distinct": [
+          200,
+          203,
+          205
+        ],
+        "max": 205,
+        "median": 203,
+        "min": 200
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          45,
+          46
+        ],
+        "max": 46,
+        "median": 45,
+        "min": 45
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          3489,
+          3490,
+          3491
+        ],
+        "max": 3491,
+        "median": 3490,
+        "min": 3489
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "make_test": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "cli.test",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "logirad.test",
+        "make",
+        "sh",
+        "uname",
+        "vet"
+      ],
+      [
+        "asm",
+        "bash",
+        "cgo",
+        "compile",
+        "gcc",
+        "go",
+        "link",
+        "make",
+        "sh",
+        "uname",
+        "vet"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          1.037865,
+          1.043865,
+          1.144719,
+          1.252885,
+          2.17952
+        ],
+        "max": 2.17952,
+        "median": 1.144719,
+        "min": 1.037865
+      },
+      "exec_count": {
+        "distinct": [
+          44,
+          58
+        ],
+        "max": 58,
+        "median": 44,
+        "min": 44
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          101,
+          177
+        ],
+        "max": 177,
+        "median": 101,
+        "min": 101
+      },
+      "file_delete_count": {
+        "distinct": [
+          262,
+          359
+        ],
+        "max": 359,
+        "median": 262,
+        "min": 262
+      },
+      "file_effect_count": {
+        "distinct": [
+          3882,
+          3883,
+          5943
+        ],
+        "max": 5943,
+        "median": 3883,
+        "min": 3882
+      },
+      "file_modify_count": {
+        "distinct": [
+          113,
+          1535
+        ],
+        "max": 1535,
+        "median": 113,
+        "min": 113
+      },
+      "file_rename_count": {
+        "distinct": [
+          0,
+          2
+        ],
+        "max": 2,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          153,
+          158,
+          160,
+          164,
+          226
+        ],
+        "max": 226,
+        "median": 160,
+        "min": 153
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          8,
+          9,
+          10
+        ],
+        "max": 10,
+        "median": 10,
+        "min": 8
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          401,
+          1808
+        ],
+        "max": 1808,
+        "median": 401,
+        "min": 401
+      },
+      "process_member_count": {
+        "distinct": [
+          196,
+          201,
+          203,
+          207,
+          283
+        ],
+        "max": 283,
+        "median": 203,
+        "min": 196
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          43,
+          57
+        ],
+        "max": 57,
+        "median": 43,
+        "min": 43
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          3481,
+          3482,
+          4135
+        ],
+        "max": 4135,
+        "median": 3482,
+        "min": 3481
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "path_hijack": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "git"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001188,
+          0.001213,
+          0.00356
+        ],
+        "max": 0.00356,
+        "median": 0.001213,
+        "min": 0.001188
+      },
+      "exec_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_create_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "file_delete_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_effect_count": {
+        "distinct": [
+          77
+        ],
+        "max": 77,
+        "median": 77,
+        "min": 77
+      },
+      "file_modify_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "process_member_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          76
+        ],
+        "max": 76,
+        "median": 76,
+        "min": 76
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "python_subprocess": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash",
+        "python3",
+        "true"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001061,
+          0.001103,
+          0.001147,
+          0.00117,
+          0.00158
+        ],
+        "max": 0.00158,
+        "median": 0.001147,
+        "min": 0.001061
+      },
+      "exec_count": {
+        "distinct": [
+          3
+        ],
+        "max": 3,
+        "median": 3,
+        "min": 3
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_modify_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "shell_startup_control": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001294,
+          0.001606,
+          0.001685
+        ],
+        "max": 0.001685,
+        "median": 0.001606,
+        "min": 0.001294
+      },
+      "exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_modify_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "shell_startup_effect": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 3,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 3,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001499,
+          0.001763,
+          0.002946
+        ],
+        "max": 0.002946,
+        "median": 0.001763,
+        "min": 0.001499
+      },
+      "exec_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_create_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "file_modify_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          4
+        ],
+        "max": 4,
+        "median": 4,
+        "min": 4
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "simple_printf": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001263,
+          0.001318,
+          0.001744,
+          0.002089,
+          0.004601
+        ],
+        "max": 0.004601,
+        "median": 0.001744,
+        "min": 0.001263
+      },
+      "exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_create_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "file_modify_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  },
+  "workspace_file": {
+    "agent_capture": [
+      "complete"
+    ],
+    "agent_interpretation": [
+      "complete"
+    ],
+    "ancestry_complete": 5,
+    "confidence": [
+      "high"
+    ],
+    "exec_basename_sets": [
+      [
+        "bash"
+      ]
+    ],
+    "file_capture": [
+      "complete"
+    ],
+    "n": 5,
+    "network_capture": [
+      "not_applicable"
+    ],
+    "numeric": {
+      "duration_seconds": {
+        "distinct": [
+          0.001315,
+          0.001504,
+          0.001876,
+          0.002022,
+          0.005935
+        ],
+        "max": 0.005935,
+        "median": 0.001876,
+        "min": 0.001315
+      },
+      "exec_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "exec_replacement_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_create_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_delete_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "file_effect_count": {
+        "distinct": [
+          5
+        ],
+        "max": 5,
+        "median": 5,
+        "min": 5
+      },
+      "file_modify_count": {
+        "distinct": [
+          2
+        ],
+        "max": 2,
+        "median": 2,
+        "min": 2
+      },
+      "file_rename_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "fork_only_process_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "localhost_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "max_process_depth": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "network_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_local_network_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "non_workspace_file_effect_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "process_member_count": {
+        "distinct": [
+          1
+        ],
+        "max": 1,
+        "median": 1,
+        "min": 1
+      },
+      "transitive_exec_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "unique_destination_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "workspace_file_effect_count": {
+        "distinct": [
+          5
+        ],
+        "max": 5,
+        "median": 5,
+        "min": 5
+      },
+      "wrapper_count": {
+        "distinct": [
+          0
+        ],
+        "max": 0,
+        "median": 0,
+        "min": 0
+      }
+    },
+    "process_capture": [
+      "complete"
+    ]
+  }
+}

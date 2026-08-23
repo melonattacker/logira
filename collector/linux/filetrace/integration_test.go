@@ -127,6 +127,27 @@ func TestFileLifecyclePipeline(t *testing.T) {
 			t.Fatalf("missing op %q; events=%+v", want, got)
 		}
 	}
+	for _, want := range []struct {
+		name    string
+		op      string
+		syscall string
+		path    string
+	}{
+		{name: "create", op: "create", syscall: "openat2", path: created},
+		{name: "python write", op: "modify", syscall: "write", path: pythonPath},
+		{name: "truncate", op: "modify", syscall: "truncate", path: renamed},
+		{name: "delete", op: "delete", syscall: "unlinkat", path: renamed},
+	} {
+		if !hasFileOpSyscallPath(got, want.op, want.syscall, want.path) {
+			t.Fatalf("missing %s event op=%q syscall=%q path=%q; events=%+v", want.name, want.op, want.syscall, want.path, got)
+		}
+	}
+	if !hasFileOpSyscallPathFlags(got, "modify", "write", created, unix.O_APPEND) {
+		t.Fatalf("missing append event op=modify syscall=write path=%q flags&=%d; events=%+v", created, unix.O_APPEND, got)
+	}
+	if !hasRename(got, created, renamed) {
+		t.Fatalf("missing rename event %q -> %q; events=%+v", created, renamed, got)
+	}
 	if count := countFileOpPath(got, "modify", shellPath); count < 2 {
 		t.Fatalf("shell redirection writes lost dup provenance: got %d modify events; events=%+v", count, got)
 	}
@@ -142,6 +163,33 @@ func TestFileLifecyclePipeline(t *testing.T) {
 
 func hasFileOpPath(events []model.FileDetail, op, path string) bool {
 	return countFileOpPath(events, op, path) > 0
+}
+
+func hasFileOpSyscallPath(events []model.FileDetail, op, syscall, path string) bool {
+	for _, event := range events {
+		if event.Op == op && event.Syscall == syscall && event.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFileOpSyscallPathFlags(events []model.FileDetail, op, syscall, path string, requiredFlags int) bool {
+	for _, event := range events {
+		if event.Op == op && event.Syscall == syscall && event.Path == path && int(event.Flags)&requiredFlags == requiredFlags {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRename(events []model.FileDetail, oldPath, newPath string) bool {
+	for _, event := range events {
+		if event.Op == "rename" && event.Path == oldPath && event.Path2 == newPath {
+			return true
+		}
+	}
+	return false
 }
 
 func countFileOpPath(events []model.FileDetail, op, path string) int {

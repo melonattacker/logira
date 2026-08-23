@@ -3,6 +3,7 @@
 package logirad
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/melonattacker/logira/collector"
+	"github.com/melonattacker/logira/internal/ipc"
 	"github.com/melonattacker/logira/internal/model"
 	"github.com/melonattacker/logira/internal/runs"
 	"github.com/melonattacker/logira/internal/storage"
@@ -250,6 +252,45 @@ func TestOrderlyCloseDrainsAdmittedMessages(t *testing.T) {
 	}
 	if len(events) != 100 {
 		t.Fatalf("persisted events=%d, want 100", len(events))
+	}
+}
+
+func TestAgentTelemetryFinalizationACKPrecedesSessionClose(t *testing.T) {
+	runDir := t.TempDir()
+	store, err := storage.Open(storage.OpenParams{RunID: "agent-finalize", RunDir: runDir, StartTS: 1, MetaJSON: `{}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession("s", os.Getuid(), os.Getgid(), runDir, false, false, false, runDir, runDir,
+		runs.Meta{RunID: "agent-finalize", AgentProvider: "codex", Coverage: runs.Coverage{Agent: runs.AgentCoverage{Capture: "unknown", Interpretation: "unknown"}}},
+		store, nil, nil, 1)
+	for i := 0; i < 32; i++ {
+		if err := s.appendAgent(context.Background(), model.AgentDetail{Provider: "codex", Kind: "agent_message", ItemID: "item"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stats := ipc.AgentTelemetryStats{Capture: "complete", Interpretation: "complete", LinesSeen: 32, LinesPersisted: 32}
+	if err := s.finishAgentTelemetry(context.Background(), stats); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.meta.Coverage.Agent; got.LinesPersisted != 32 || got.Capture != "complete" {
+		t.Fatalf("FinishAgentTelemetry ACK returned before metadata update: %+v", got)
+	}
+
+	s.closeWithEnd(2, collector.DropCounts{})
+	meta, err := runs.ReadMeta(runDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Coverage.Agent.LinesSeen != 32 || meta.Coverage.Agent.LinesPersisted != 32 || meta.Coverage.Agent.Capture != "complete" {
+		t.Fatalf("persisted metadata=%+v", meta.Coverage.Agent)
+	}
+	events, err := storage.ReadJSONL(filepath.Join(runDir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 32 {
+		t.Fatalf("persisted agent events=%d, want 32", len(events))
 	}
 }
 

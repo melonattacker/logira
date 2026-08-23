@@ -209,10 +209,15 @@ func RunCommand(ctx context.Context, args []string) error {
 		}()
 	}
 
-	waitErr := cmd.Wait()
+	var streamResult codexStreamResult
+	var waitErr error
+	if telemetryDone != nil {
+		streamResult, waitErr = waitForAgentTelemetryAndCommand(cmd, telemetryDone)
+	} else {
+		waitErr = cmd.Wait()
+	}
 	exitCode := exitCodeFromErr(waitErr)
 	if telemetryDone != nil {
-		streamResult := <-telemetryDone
 		if streamResult.Warning != nil {
 			fmt.Fprintf(os.Stderr, "warning: Codex telemetry was only partially captured: %v\n", streamResult.Warning)
 		}
@@ -251,6 +256,14 @@ func RunCommand(ctx context.Context, args []string) error {
 		return &ExitCodeError{Code: exitCode}
 	}
 	return nil
+}
+
+func waitForAgentTelemetryAndCommand(cmd *exec.Cmd, telemetryDone <-chan codexStreamResult) (codexStreamResult, error) {
+	// StdoutPipe is closed by Cmd.Wait. Waiting for the consumer first ensures
+	// it has observed EOF and received persistence ACKs for every parsed record
+	// before Wait is allowed to reap the process and close the pipe.
+	streamResult := <-telemetryDone
+	return streamResult, cmd.Wait()
 }
 
 func stopRunWithRetry(client *ipc.Client, sessionID string, exitCode int) error {

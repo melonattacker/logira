@@ -1,0 +1,40 @@
+{"scenario":"simple_printf","sample":1,"run_id":"20260823-020938-codex","runtime_command":"printf \"BASELINE_PRINTF\\n\""}
+{"scenario":"simple_printf","sample":2,"run_id":"20260823-020946-codex","runtime_command":"printf \"BASELINE_PRINTF\\n\""}
+{"scenario":"simple_printf","sample":3,"run_id":"20260823-020955-codex","runtime_command":"printf \"BASELINE_PRINTF\\n\""}
+{"scenario":"simple_printf","sample":4,"run_id":"20260823-021005-codex","runtime_command":"printf \"BASELINE_PRINTF\\n\""}
+{"scenario":"simple_printf","sample":5,"run_id":"20260823-021016-codex","runtime_command":"printf \"BASELINE_PRINTF\\n\""}
+{"scenario":"git_status","sample":1,"run_id":"20260823-021023-codex","runtime_command":"git status --short >/dev/null"}
+{"scenario":"git_status","sample":2,"run_id":"20260823-021033-codex","runtime_command":"git status --short >/dev/null"}
+{"scenario":"git_status","sample":3,"run_id":"20260823-021042-codex","runtime_command":"git status --short >/dev/null"}
+{"scenario":"git_status","sample":4,"run_id":"20260823-021050-codex","runtime_command":"git status --short >/dev/null"}
+{"scenario":"git_status","sample":5,"run_id":"20260823-021059-codex","runtime_command":"git status --short >/dev/null"}
+{"scenario":"git_diff_stat","sample":1,"run_id":"20260823-021107-codex","runtime_command":"git diff --stat >/dev/null"}
+{"scenario":"git_diff_stat","sample":2,"run_id":"20260823-021121-codex","runtime_command":"git diff --stat >/dev/null"}
+{"scenario":"git_diff_stat","sample":3,"run_id":"20260823-021132-codex","runtime_command":"git diff --stat >/dev/null"}
+{"scenario":"git_diff_stat","sample":4,"run_id":"20260823-021142-codex","runtime_command":"git diff --stat >/dev/null"}
+{"scenario":"git_diff_stat","sample":5,"run_id":"20260823-021150-codex","runtime_command":"git diff --stat >/dev/null"}
+{"scenario":"go_test","sample":1,"run_id":"20260823-021159-codex","runtime_command":"go test ./..."}
+{"scenario":"go_test","sample":2,"run_id":"20260823-021209-codex","runtime_command":"go test ./..."}
+{"scenario":"go_test","sample":3,"run_id":"20260823-021218-codex","runtime_command":"go test ./..."}
+{"scenario":"go_test","sample":4,"run_id":"20260823-021228-codex","runtime_command":"go test ./..."}
+{"scenario":"go_test","sample":5,"run_id":"20260823-021238-codex","runtime_command":"go test ./..."}
+{"scenario":"make_test","sample":1,"run_id":"20260823-021247-codex","runtime_command":"make test"}
+{"scenario":"make_test","sample":2,"run_id":"20260823-021259-codex","runtime_command":"make test"}
+{"scenario":"make_test","sample":3,"run_id":"20260823-021310-codex","runtime_command":"make test"}
+{"scenario":"make_test","sample":4,"run_id":"20260823-021326-codex","runtime_command":"make test"}
+{"scenario":"make_test","sample":5,"run_id":"20260823-021336-codex","runtime_command":"make test"}
+{"scenario":"python_subprocess","sample":1,"run_id":"20260823-021345-codex","runtime_command":"python3 -c 'import subprocess; subprocess.run([\"/usr/bin/true\"], check=True)'"}
+{"scenario":"python_subprocess","sample":2,"run_id":"20260823-021356-codex","runtime_command":"python3 -c 'import subprocess; subprocess.run([\"/usr/bin/true\"], check=True)'"}
+{"scenario":"python_subprocess","sample":3,"run_id":"20260823-021404-codex","runtime_command":"python3 -c 'import subprocess; subprocess.run([\"/usr/bin/true\"], check=True)'"}
+{"scenario":"python_subprocess","sample":4,"run_id":"20260823-021414-codex","runtime_command":"python3 -c 'import subprocess; subprocess.run([\"/usr/bin/true\"], check=True)'"}
+{"scenario":"python_subprocess","sample":5,"run_id":"20260823-021424-codex","runtime_command":"python3 -c 'import subprocess; subprocess.run([\"/usr/bin/true\"], check=True)'"}
+{"scenario":"bash_pipeline","sample":1,"run_id":"20260823-021433-codex","runtime_command":"printf x | tr x y >/dev/null"}
+{"scenario":"bash_pipeline","sample":2,"run_id":"20260823-021442-codex","runtime_command":"printf x | tr x y >/dev/null"}
+{"scenario":"bash_pipeline","sample":3,"run_id":"20260823-021451-codex","runtime_command":"printf x | tr x y >/dev/null"}
+{"scenario":"bash_pipeline","sample":4,"run_id":"20260823-021500-codex","runtime_command":"printf x | tr x y >/dev/null"}
+{"scenario":"bash_pipeline","sample":5,"run_id":"20260823-021510-codex","runtime_command":"printf x | tr x y >/dev/null"}
+{"scenario":"workspace_file","sample":1,"run_id":"20260823-021658-codex","runtime_command":"printf baseline > .logira-research-fixture/normal-file.txt; printf append >> .logira-research-fixture/normal-file.txt"}
+{"scenario":"workspace_file","sample":2,"run_id":"20260823-021706-codex","runtime_command":"printf baseline > .logira-research-fixture/normal-file.txt; printf append >> .logira-research-fixture/normal-file.txt"}
+{"scenario":"workspace_file","sample":3,"run_id":"20260823-021715-codex","runtime_command":"printf baseline > .logira-research-fixture/normal-file.txt; printf append >> .logira-research-fixture/normal-file.txt"}
+{"scenario":"workspace_file","sample":4,"run_id":"20260823-021726-codex","runtime_command":"printf baseline > .logira-research-fixture/normal-file.txt; printf append >> .logira-research-fixture/normal-file.txt"}
+{"scenario":"workspace_file","sample":5,"run_id":"20260823-021737-codex","runtime_command":"printf baseline > .logira-research-fixture/normal-file.txt; printf append >> .logira-research-fixture/normal-file.txt"}

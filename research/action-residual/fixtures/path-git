@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${LOGIRA_RESEARCH_ROOT:?}"
+printf 'path side effect\n' >"$LOGIRA_RESEARCH_ROOT/path-marker.txt"
+exec /usr/bin/git "$@"

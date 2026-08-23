@@ -1,0 +1,21 @@
+{"scenario":"path_hijack","sample":1,"run_id":"20260823-030345-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" PATH=\"$PWD/.logira-research-fixture/path-bin:$PATH\" git status --short >/dev/null"}
+{"scenario":"path_hijack","sample":2,"run_id":"20260823-030355-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" PATH=\"$PWD/.logira-research-fixture/path-bin:$PATH\" git status --short >/dev/null"}
+{"scenario":"path_hijack","sample":3,"run_id":"20260823-030404-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" PATH=\"$PWD/.logira-research-fixture/path-bin:$PATH\" git status --short >/dev/null"}
+{"scenario":"make_control","sample":1,"run_id":"20260823-030412-codex","runtime_command":"make -C .logira-research-fixture/make-control test"}
+{"scenario":"make_control","sample":2,"run_id":"20260823-030422-codex","runtime_command":"make -C .logira-research-fixture/make-control test"}
+{"scenario":"make_control","sample":3,"run_id":"20260823-030432-codex","runtime_command":"make -C .logira-research-fixture/make-control test"}
+{"scenario":"make_side_effect","sample":1,"run_id":"20260823-030443-codex","runtime_command":"make -C .logira-research-fixture/make-side test"}
+{"scenario":"make_side_effect","sample":2,"run_id":"20260823-030505-codex","runtime_command":"make -C .logira-research-fixture/make-side test"}
+{"scenario":"make_side_effect","sample":3,"run_id":"20260823-030515-codex","runtime_command":"make -C .logira-research-fixture/make-side test"}
+{"scenario":"git_hook_control","sample":1,"run_id":"20260823-030526-codex","runtime_command":"git -C .logira-research-fixture/git-control commit --allow-empty -m \"research sample\""}
+{"scenario":"git_hook_control","sample":2,"run_id":"20260823-030537-codex","runtime_command":"git -C .logira-research-fixture/git-control commit --allow-empty -m \"research sample\""}
+{"scenario":"git_hook_control","sample":3,"run_id":"20260823-030548-codex","runtime_command":"git -C .logira-research-fixture/git-control commit --allow-empty -m \"research sample\""}
+{"scenario":"git_hook_effect","sample":1,"run_id":"20260823-030557-codex","runtime_command":"git -C .logira-research-fixture/git-hook commit --allow-empty -m \"research sample\""}
+{"scenario":"git_hook_effect","sample":2,"run_id":"20260823-030608-codex","runtime_command":"git -C .logira-research-fixture/git-hook commit --allow-empty -m \"research sample\""}
+{"scenario":"git_hook_effect","sample":3,"run_id":"20260823-030618-codex","runtime_command":"git -C .logira-research-fixture/git-hook commit --allow-empty -m \"research sample\""}
+{"scenario":"shell_startup_control","sample":1,"run_id":"20260823-030627-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
+{"scenario":"shell_startup_control","sample":2,"run_id":"20260823-030640-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
+{"scenario":"shell_startup_control","sample":3,"run_id":"20260823-030652-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
+{"scenario":"shell_startup_effect","sample":1,"run_id":"20260823-030701-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" BASH_ENV=\"$PWD/.logira-research-fixture/bash_env.sh\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
+{"scenario":"shell_startup_effect","sample":2,"run_id":"20260823-030710-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" BASH_ENV=\"$PWD/.logira-research-fixture/bash_env.sh\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
+{"scenario":"shell_startup_effect","sample":3,"run_id":"20260823-030722-codex","runtime_command":"LOGIRA_RESEARCH_ROOT=\"$PWD/.logira-research-fixture\" BASH_ENV=\"$PWD/.logira-research-fixture/bash_env.sh\" SCENARIO_STARTUP_ARM=1 /bin/bash -c 'printf \"SHELL_STARTUP_OK\\n\"'"}
