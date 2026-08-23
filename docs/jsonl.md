@@ -143,6 +143,11 @@ Resolution uses the actual dirfd, live `/proc` metadata, or run-local task CWD
 and successful-open FD provenance. Otherwise the raw path is retained with an
 explicit unresolved state.
 
+The Linux file probe carries successful-open path provenance across successful
+`dup`, `dup2`, and `dup3` calls, and invalidates it after successful `close`.
+This is the minimal lifecycle needed to attribute common shell redirections;
+it is not a general-purpose FD auditing subsystem.
+
 ## Net Event (`type=net`)
 
 ```json

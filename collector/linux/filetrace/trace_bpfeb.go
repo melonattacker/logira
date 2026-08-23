@@ -95,6 +95,9 @@ type traceSpecs struct {
 type traceProgramSpecs struct {
 	TraceEnterChdir     *ebpf.ProgramSpec `ebpf:"trace_enter_chdir"`
 	TraceEnterClose     *ebpf.ProgramSpec `ebpf:"trace_enter_close"`
+	TraceEnterDup       *ebpf.ProgramSpec `ebpf:"trace_enter_dup"`
+	TraceEnterDup2      *ebpf.ProgramSpec `ebpf:"trace_enter_dup2"`
+	TraceEnterDup3      *ebpf.ProgramSpec `ebpf:"trace_enter_dup3"`
 	TraceEnterFchdir    *ebpf.ProgramSpec `ebpf:"trace_enter_fchdir"`
 	TraceEnterFtruncate *ebpf.ProgramSpec `ebpf:"trace_enter_ftruncate"`
 	TraceEnterOpenat    *ebpf.ProgramSpec `ebpf:"trace_enter_openat"`
@@ -110,6 +113,9 @@ type traceProgramSpecs struct {
 	TraceEnterWritev    *ebpf.ProgramSpec `ebpf:"trace_enter_writev"`
 	TraceExitChdir      *ebpf.ProgramSpec `ebpf:"trace_exit_chdir"`
 	TraceExitClose      *ebpf.ProgramSpec `ebpf:"trace_exit_close"`
+	TraceExitDup        *ebpf.ProgramSpec `ebpf:"trace_exit_dup"`
+	TraceExitDup2       *ebpf.ProgramSpec `ebpf:"trace_exit_dup2"`
+	TraceExitDup3       *ebpf.ProgramSpec `ebpf:"trace_exit_dup3"`
 	TraceExitFchdir     *ebpf.ProgramSpec `ebpf:"trace_exit_fchdir"`
 	TraceExitFtruncate  *ebpf.ProgramSpec `ebpf:"trace_exit_ftruncate"`
 	TraceExitOpenat     *ebpf.ProgramSpec `ebpf:"trace_exit_openat"`
@@ -178,6 +184,9 @@ func (m *traceMaps) Close() error {
 type tracePrograms struct {
 	TraceEnterChdir     *ebpf.Program `ebpf:"trace_enter_chdir"`
 	TraceEnterClose     *ebpf.Program `ebpf:"trace_enter_close"`
+	TraceEnterDup       *ebpf.Program `ebpf:"trace_enter_dup"`
+	TraceEnterDup2      *ebpf.Program `ebpf:"trace_enter_dup2"`
+	TraceEnterDup3      *ebpf.Program `ebpf:"trace_enter_dup3"`
 	TraceEnterFchdir    *ebpf.Program `ebpf:"trace_enter_fchdir"`
 	TraceEnterFtruncate *ebpf.Program `ebpf:"trace_enter_ftruncate"`
 	TraceEnterOpenat    *ebpf.Program `ebpf:"trace_enter_openat"`
@@ -193,6 +202,9 @@ type tracePrograms struct {
 	TraceEnterWritev    *ebpf.Program `ebpf:"trace_enter_writev"`
 	TraceExitChdir      *ebpf.Program `ebpf:"trace_exit_chdir"`
 	TraceExitClose      *ebpf.Program `ebpf:"trace_exit_close"`
+	TraceExitDup        *ebpf.Program `ebpf:"trace_exit_dup"`
+	TraceExitDup2       *ebpf.Program `ebpf:"trace_exit_dup2"`
+	TraceExitDup3       *ebpf.Program `ebpf:"trace_exit_dup3"`
 	TraceExitFchdir     *ebpf.Program `ebpf:"trace_exit_fchdir"`
 	TraceExitFtruncate  *ebpf.Program `ebpf:"trace_exit_ftruncate"`
 	TraceExitOpenat     *ebpf.Program `ebpf:"trace_exit_openat"`
@@ -212,6 +224,9 @@ func (p *tracePrograms) Close() error {
 	return _TraceClose(
 		p.TraceEnterChdir,
 		p.TraceEnterClose,
+		p.TraceEnterDup,
+		p.TraceEnterDup2,
+		p.TraceEnterDup3,
 		p.TraceEnterFchdir,
 		p.TraceEnterFtruncate,
 		p.TraceEnterOpenat,
@@ -227,6 +242,9 @@ func (p *tracePrograms) Close() error {
 		p.TraceEnterWritev,
 		p.TraceExitChdir,
 		p.TraceExitClose,
+		p.TraceExitDup,
+		p.TraceExitDup2,
+		p.TraceExitDup3,
 		p.TraceExitFchdir,
 		p.TraceExitFtruncate,
 		p.TraceExitOpenat,

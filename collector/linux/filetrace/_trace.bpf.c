@@ -13,6 +13,7 @@ enum file_kind {
     FILE_TRUNCATE = 5,
     FILE_CHDIR = 6,
     FILE_CLOSE = 7,
+    FILE_DUP = 8,
 };
 
 enum file_syscall {
@@ -31,6 +32,9 @@ enum file_syscall {
     SC_CHDIR = 13,
     SC_FCHDIR = 14,
     SC_CLOSE = 15,
+    SC_DUP = 16,
+    SC_DUP2 = 17,
+    SC_DUP3 = 18,
 };
 
 enum correlation_state {
@@ -267,7 +271,7 @@ static __always_inline int finish_pending(__u32 expected_kind, __u32 syscall, lo
     }
 
     int success = 0;
-    if (st->kind == FILE_OPEN) {
+    if (st->kind == FILE_OPEN || st->kind == FILE_DUP) {
         success = ret >= 0;
     } else if (st->kind == FILE_WRITE) {
         success = ret > 0;
@@ -285,6 +289,23 @@ static __always_inline int finish_pending(__u32 expected_kind, __u32 syscall, lo
     if (st->kind == FILE_CLOSE) {
         struct fd_path_key key = {.cgroup_id = st->cgroup_id, .tgid = st->tgid, .fd = st->fd};
         bpf_map_delete_elem(&fd_paths, &key);
+        bpf_map_delete_elem(&pending_file_ops, &tid);
+        return 0;
+    }
+
+    if (st->kind == FILE_DUP) {
+        struct fd_path_key old_key = {.cgroup_id = st->cgroup_id, .tgid = st->tgid, .fd = st->fd};
+        struct fd_path_key new_key = {.cgroup_id = st->cgroup_id, .tgid = st->tgid, .fd = (__s32)ret};
+        struct fd_path_value *value = bpf_map_lookup_elem(&fd_paths, &old_key);
+        if (value) {
+            struct fd_path_value copy = {};
+            __builtin_memcpy(&copy, value, sizeof(copy));
+            bpf_map_update_elem(&fd_paths, &new_key, &copy, BPF_ANY);
+        } else {
+            /* Replacing a known destination from an unknown source must not
+             * leave stale path provenance behind. */
+            bpf_map_delete_elem(&fd_paths, &new_key);
+        }
         bpf_map_delete_elem(&pending_file_ops, &tid);
         return 0;
     }
@@ -358,6 +379,15 @@ static __always_inline int cache_fd_operation(__u32 kind, __u32 syscall, __s32 f
         return 0;
     }
     load_fd_path(st, fd);
+    return save_pending(st);
+}
+
+static __always_inline int cache_dup(__u32 syscall, __s32 oldfd) {
+    struct pending_file_op *st = new_pending(FILE_DUP, syscall);
+    if (!st) {
+        return 0;
+    }
+    st->fd = oldfd;
     return save_pending(st);
 }
 
@@ -498,6 +528,21 @@ SEC("tracepoint/syscalls/sys_enter_fchdir")
 int trace_enter_fchdir(struct trace_event_raw_sys_enter *ctx) { return cache_fd_operation(FILE_CHDIR, SC_FCHDIR, (__s32)ctx->args[0]); }
 SEC("tracepoint/syscalls/sys_exit_fchdir")
 int trace_exit_fchdir(struct trace_event_raw_sys_exit *ctx) { return finish_pending(FILE_CHDIR, SC_FCHDIR, ctx->ret); }
+
+SEC("tracepoint/syscalls/sys_enter_dup")
+int trace_enter_dup(struct trace_event_raw_sys_enter *ctx) { return cache_dup(SC_DUP, (__s32)ctx->args[0]); }
+SEC("tracepoint/syscalls/sys_exit_dup")
+int trace_exit_dup(struct trace_event_raw_sys_exit *ctx) { return finish_pending(FILE_DUP, SC_DUP, ctx->ret); }
+
+SEC("tracepoint/syscalls/sys_enter_dup2")
+int trace_enter_dup2(struct trace_event_raw_sys_enter *ctx) { return cache_dup(SC_DUP2, (__s32)ctx->args[0]); }
+SEC("tracepoint/syscalls/sys_exit_dup2")
+int trace_exit_dup2(struct trace_event_raw_sys_exit *ctx) { return finish_pending(FILE_DUP, SC_DUP2, ctx->ret); }
+
+SEC("tracepoint/syscalls/sys_enter_dup3")
+int trace_enter_dup3(struct trace_event_raw_sys_enter *ctx) { return cache_dup(SC_DUP3, (__s32)ctx->args[0]); }
+SEC("tracepoint/syscalls/sys_exit_dup3")
+int trace_exit_dup3(struct trace_event_raw_sys_exit *ctx) { return finish_pending(FILE_DUP, SC_DUP3, ctx->ret); }
 
 SEC("tracepoint/syscalls/sys_enter_close")
 int trace_enter_close(struct trace_event_raw_sys_enter *ctx) { return cache_fd_operation(FILE_CLOSE, SC_CLOSE, (__s32)ctx->args[0]); }

@@ -31,6 +31,7 @@ const (
 
 	autoStopPollInterval         = 250 * time.Millisecond
 	autoStopEmptyGrace           = 500 * time.Millisecond
+	autoStopAgentEmptyGrace      = 30 * time.Second
 	autoStopNoAttachGraceTimeout = 30 * time.Second
 )
 
@@ -218,7 +219,7 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	m.bySessionID[sessionID] = s
 	m.byCgroupID[cgID] = s
 	m.mu.Unlock()
-	go m.autoStopWhenCgroupDrains(sessionID, cg.Path)
+	go m.autoStopWhenCgroupDrains(sessionID, cg.Path, meta.AgentProvider)
 
 	out = ipc.StartRunResponse{
 		Type:       ipc.MsgTypeStartRunOK,
@@ -335,11 +336,23 @@ func cgroupHasProcs(cgroupPath string) (bool, error) {
 	return strings.TrimSpace(string(b)) != "", nil
 }
 
-func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath string) {
+func autoStopGrace(agentProvider string) time.Duration {
+	if strings.TrimSpace(agentProvider) != "" {
+		// The audited process may exit before its JSONL stdout has been drained and
+		// persisted. Keep agent sessions available long enough for the CLI to finish
+		// appending telemetry and explicitly stop the run. The timeout still reaps a
+		// session if the CLI disappears before completing that handshake.
+		return autoStopAgentEmptyGrace
+	}
+	return autoStopEmptyGrace
+}
+
+func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath string, agentProvider string) {
 	t := time.NewTicker(autoStopPollInterval)
 	defer t.Stop()
 
 	start := time.Now()
+	emptyGrace := autoStopGrace(agentProvider)
 	seenProcesses := false
 	emptySince := time.Time{}
 
@@ -374,7 +387,7 @@ func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath s
 			emptySince = time.Now()
 			continue
 		}
-		if time.Since(emptySince) < autoStopEmptyGrace {
+		if time.Since(emptySince) < emptyGrace {
 			continue
 		}
 		s, err := m.takeSessionForStop(sessionID, 0, false)

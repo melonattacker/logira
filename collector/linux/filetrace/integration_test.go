@@ -87,6 +87,13 @@ func TestFileLifecyclePipeline(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	shellPath := filepath.Join(tmp, "shell-redirection.txt")
+	if bash, err := exec.LookPath("bash"); err == nil {
+		command := "printf shell > " + strconv.Quote(shellPath) + "; printf append >> " + strconv.Quote(shellPath)
+		if err := exec.Command(bash, "-c", command).Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := unix.Open(filepath.Join(tmp, "missing", "failed.txt"), unix.O_CREAT|unix.O_WRONLY, 0o600); err == nil {
 		t.Fatal("expected failed open")
 	}
@@ -120,6 +127,9 @@ func TestFileLifecyclePipeline(t *testing.T) {
 			t.Fatalf("missing op %q; events=%+v", want, got)
 		}
 	}
+	if count := countFileOpPath(got, "modify", shellPath); count < 2 {
+		t.Fatalf("shell redirection writes lost dup provenance: got %d modify events; events=%+v", count, got)
+	}
 	for _, event := range got {
 		if strings.Contains(event.Path, "failed.txt") {
 			t.Fatalf("failed syscall fabricated an effect: %+v", event)
@@ -128,6 +138,20 @@ func TestFileLifecyclePipeline(t *testing.T) {
 	if stats.BPFEmitted == 0 || stats.RingSamples == 0 || stats.Decoded == 0 || stats.DecodeFailures != 0 {
 		t.Fatalf("pipeline counters=%+v", stats)
 	}
+}
+
+func hasFileOpPath(events []model.FileDetail, op, path string) bool {
+	return countFileOpPath(events, op, path) > 0
+}
+
+func countFileOpPath(events []model.FileDetail, op, path string) int {
+	count := 0
+	for _, event := range events {
+		if event.Op == op && event.Path == path {
+			count++
+		}
+	}
+	return count
 }
 
 func hasFileOp(events []model.FileDetail, op string) bool {

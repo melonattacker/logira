@@ -7,12 +7,22 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/melonattacker/logira/collector"
 	"github.com/melonattacker/logira/internal/model"
 	"github.com/melonattacker/logira/internal/runs"
 	"github.com/melonattacker/logira/internal/storage"
 )
+
+func TestAgentAutoStopGraceAllowsTelemetryDrain(t *testing.T) {
+	if got := autoStopGrace(""); got != autoStopEmptyGrace {
+		t.Fatalf("ordinary run grace=%v, want %v", got, autoStopEmptyGrace)
+	}
+	if got := autoStopGrace("codex"); got != 30*time.Second {
+		t.Fatalf("agent run grace=%v, want 30s", got)
+	}
+}
 
 func TestNormalizeFileDetail_DoesNotFilterByWatchPaths(t *testing.T) {
 	s := &session{

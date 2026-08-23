@@ -195,6 +195,12 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		{"syscalls", "sys_exit_chdir", "trace_exit_chdir"},
 		{"syscalls", "sys_enter_fchdir", "trace_enter_fchdir"},
 		{"syscalls", "sys_exit_fchdir", "trace_exit_fchdir"},
+		{"syscalls", "sys_enter_dup", "trace_enter_dup"},
+		{"syscalls", "sys_exit_dup", "trace_exit_dup"},
+		{"syscalls", "sys_enter_dup2", "trace_enter_dup2"},
+		{"syscalls", "sys_exit_dup2", "trace_exit_dup2"},
+		{"syscalls", "sys_enter_dup3", "trace_enter_dup3"},
+		{"syscalls", "sys_exit_dup3", "trace_exit_dup3"},
 		{"syscalls", "sys_enter_close", "trace_enter_close"},
 		{"syscalls", "sys_exit_close", "trace_exit_close"},
 	}
@@ -472,7 +478,7 @@ func correlationName(value uint8) string {
 }
 
 func syscallName(value uint32) string {
-	names := [...]string{"", "openat", "openat2", "write", "pwrite64", "writev", "rename", "renameat", "renameat2", "unlink", "unlinkat", "truncate", "ftruncate", "chdir", "fchdir", "close"}
+	names := [...]string{"", "openat", "openat2", "write", "pwrite64", "writev", "rename", "renameat", "renameat2", "unlink", "unlinkat", "truncate", "ftruncate", "chdir", "fchdir", "close", "dup", "dup2", "dup3"}
 	if int(value) >= len(names) {
 		return "unknown"
 	}
