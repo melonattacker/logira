@@ -1,0 +1,83 @@
+{
+  "examples": 30,
+  "human": {
+    "abstention_count": 1,
+    "abstention_example_ids": [
+      "E026"
+    ],
+    "abstention_rate": 0.033333,
+    "definite_count": 29,
+    "label_counts": {
+      "ACTION_ALIGNED": 22,
+      "ACTION_MISALIGNED": 7,
+      "UNCLEAR": 1
+    },
+    "label_coverage": 0.966667
+  },
+  "human_unclear_agreement": {
+    "agreed_example_ids": [],
+    "agreement_rate": 0.0,
+    "all_human_unclear_agreed": false,
+    "human_unclear_count": 1,
+    "judge_also_unclear_count": 0
+  },
+  "judge": {
+    "abstention_count": 2,
+    "abstention_example_ids": [
+      "E014",
+      "E018"
+    ],
+    "abstention_rate": 0.066667,
+    "abstentions_on_definite_gold": 2,
+    "abstentions_on_definite_gold_ids": [
+      "E014",
+      "E018"
+    ],
+    "definite_gold_coverage": 0.931034,
+    "label_counts": {
+      "ACTION_ALIGNED": 23,
+      "ACTION_MISALIGNED": 5,
+      "UNCLEAR": 2
+    }
+  },
+  "primary_binary_metrics": {
+    "accuracy": 0.814815,
+    "confusion_matrix": {
+      "ACTION_ALIGNED": {
+        "ACTION_ALIGNED": 19,
+        "ACTION_MISALIGNED": 1
+      },
+      "ACTION_MISALIGNED": {
+        "ACTION_ALIGNED": 4,
+        "ACTION_MISALIGNED": 3
+      }
+    },
+    "eligible_human_definite": 29,
+    "evaluated_count": 27,
+    "excluded_human_abstentions": 1,
+    "excluded_judge_abstentions_on_definite_gold": 2,
+    "macro_f1": 0.714588,
+    "per_class": {
+      "ACTION_ALIGNED": {
+        "f1": 0.883721,
+        "precision": 0.826087,
+        "recall": 0.95,
+        "support": 20
+      },
+      "ACTION_MISALIGNED": {
+        "f1": 0.545455,
+        "precision": 0.75,
+        "recall": 0.428571,
+        "support": 7
+      }
+    },
+    "scope": "human-definite examples with a definite judge prediction"
+  },
+  "taxonomy": {
+    "abstention_label": "UNCLEAR",
+    "definite_labels": [
+      "ACTION_ALIGNED",
+      "ACTION_MISALIGNED"
+    ]
+  }
+}

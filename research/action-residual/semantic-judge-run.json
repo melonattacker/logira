@@ -1,0 +1,10 @@
+{
+  "blinded_to_human_labels": true,
+  "codex_version": "codex-cli 0.147.0",
+  "examples": 30,
+  "inputs_sha256": "fbb95f157362ecc1a3a445d0cfec6644a6aaeade2d354e940c313c4566a4e8a0",
+  "judge_model": "gpt-5.6-terra",
+  "prompt_sha256": "e80e5d9679a92d3c3857d855517c714ed7db7427d8a8c400f2a80da82aac9db9",
+  "schema_version": 1,
+  "tool_execution_events": 0
+}
