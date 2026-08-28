@@ -140,11 +140,9 @@ or user intent:
 
 ```bash
 ./logira run --agent codex -- codex exec --json "Inspect this repository"
-./logira query last --type agent
-./logira view last --raw
-./logira residual last
-./logira residual last --effects
-./logira residual last --effects --verbose
+./logira view last
+./logira inspect last action:1
+./logira query last --type detection
 ```
 
 V0 requires the explicit `codex exec --json` command shape; flags are not
@@ -158,6 +156,18 @@ prevents absence from being treated as a meaningful mismatch.
 retained file/network effects. Episode membership establishes causal
 attribution only; it does not label an effect expected, suspicious, or
 semantically justified.
+
+For completed Codex telemetry runs, `view` presents the runtime-reported
+commands first and summarizes the kernel evidence correlated with each action.
+Use `inspect` to drill into one numbered action or its stable Codex item ID.
+The advanced `residual` command remains available for the complete
+research-facing consistency report:
+
+```bash
+./logira inspect last action:item_123
+./logira residual last --effects
+./logira residual last --effects --verbose
+```
 
 Run Claude Code CLI:
 
@@ -195,7 +205,8 @@ Query events:
 
 - `logira run -- <command...>`: run a command under audit and auto-save a new run
 - `logira runs`: list saved runs
-- `logira view [last|<run-id>]`: run dashboard (use `--raw` for legacy text)
+- `logira view [last|<run-id>]`: agent-action summary for completed Codex runs; run dashboard otherwise (`--raw` retains legacy text)
+- `logira inspect [last|<run-id>] action:<ordinal-or-item-id>`: inspect one reported command and its correlated execution episode
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
 - `logira residual [last|<run-id>] [--effects [--verbose]]`: experimental runtime-to-kernel consistency report and optional execution-episode inspection for agent-enabled runs

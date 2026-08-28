@@ -70,6 +70,16 @@ func ViewCommand(ctx context.Context, args []string) error {
 	}
 
 	clr := cliui.NewColorizer(colorMode, noColor, os.Stdout)
+	if meta.AgentProvider == "codex" && meta.EndTS > 0 {
+		return viewAgentRun(runID, runDir, meta, limit, tsMode, clr)
+	}
+	if meta.AgentProvider != "" {
+		reason := fmt.Sprintf("unsupported agent provider %q", meta.AgentProvider)
+		if meta.AgentProvider == "codex" && meta.EndTS == 0 {
+			reason = "the run is still active"
+		}
+		stdoutf("Agent action view unavailable: %s; showing the runtime dashboard.\n\n", reason)
+	}
 	var (
 		runStartTS = meta.StartTS
 		runEndTS   = meta.EndTS
@@ -386,7 +396,7 @@ func renderTopSection(w io.Writer, title string, pairs []storage.TopPair) {
 
 func viewUsage(w io.Writer, fs *flag.FlagSet) {
 	prog := progName()
-	_, _ = fmt.Fprintf(w, "%s view: view a run summary\n\n", prog)
+	_, _ = fmt.Fprintf(w, "%s view: view agent actions or a run summary\n\n", prog)
 	_, _ = fmt.Fprintln(w, "Usage:")
 	_, _ = fmt.Fprintf(w, "  %s view [flags] [last|<run-id>]\n\n", prog)
 
@@ -396,6 +406,11 @@ func viewUsage(w io.Writer, fs *flag.FlagSet) {
 	_, _ = fmt.Fprintf(w, "  %s view --ts both --no-color last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s view --raw last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s view --json last\n\n", prog)
+	_, _ = fmt.Fprintln(w, "Notes:")
+	_, _ = fmt.Fprintln(w, "  Completed Codex telemetry runs are organized around reported command actions.")
+	_, _ = fmt.Fprintf(w, "  Drill into one with: %s inspect last action:1\n", prog)
+	_, _ = fmt.Fprintln(w, "  Non-agent, active, and unsupported-agent runs retain the runtime dashboard.")
+	_, _ = fmt.Fprintln(w)
 
 	_, _ = fmt.Fprintln(w, "Flags:")
 	fs.PrintDefaults()

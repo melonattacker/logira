@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,5 +26,15 @@ func TestCommandExitCode(t *testing.T) {
 
 	if got, ok := commandExitCode(errors.New("other")); ok || got != 0 {
 		t.Fatalf("other error got code=%d ok=%v, want code=0 ok=false", got, ok)
+	}
+}
+
+func TestRootHelpDiscoversInspectWorkflow(t *testing.T) {
+	var out bytes.Buffer
+	printRootHelp(&out, "logira")
+	for _, want := range []string{"inspect    Inspect one agent action", "logira inspect last action:1"} {
+		if !bytes.Contains(out.Bytes(), []byte(want)) {
+			t.Fatalf("root help missing %q:\n%s", want, out.String())
+		}
 	}
 }

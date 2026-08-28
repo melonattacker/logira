@@ -165,7 +165,10 @@ func renderRunEndSummary(w io.Writer, mode runSummaryMode, s runEndSummary) erro
 		}
 	}
 
-	_, err := fmt.Fprintf(w, "\n  next:\n    %s view %s\n    %s explain %s --show-related\n", progName(), s.RunID, progName(), s.RunID)
+	if _, err := fmt.Fprintf(w, "\n  next:\n    %s view %s\n", progName(), s.RunID); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(w, "    %s explain %s --show-related\n", progName(), s.RunID)
 	return err
 }
 
