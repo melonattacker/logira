@@ -60,12 +60,15 @@ Fields:
 
 - `contains_all`: all strings must be present
 - `contains_any`: at least one string must be present
+- `basename_in`: the exact lowercase executable basename must be present (the
+  filename is used when available, otherwise `argv[0]`)
 
 Notes:
 
 - Matching is case-insensitive.
 - Matching is performed against a combined lowercase string of `filename + " " + argv...`.
-- `contains_all` and `contains_any` can be used together.
+- `contains_all`, `contains_any`, and `basename_in` can be used together; each
+  configured condition family must match.
 
 ### `file` Rules
 

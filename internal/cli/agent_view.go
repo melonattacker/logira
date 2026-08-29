@@ -59,14 +59,18 @@ func renderAgentRunView(w io.Writer, view actionview.Run, limit int, tsMode cliu
 			s := action.Episode.Summary
 			_, _ = fmt.Fprintf(w, "      exec %d · process %d · file %d · net %d\n", s.Execs, s.Processes, s.Files, s.Networks)
 		}
-		if len(action.Detections) > 0 {
-			_, _ = fmt.Fprintf(w, "      detections %d\n", len(action.Detections))
+		if signal := actionDetectionSignal(action.Detections); signal != "" {
+			_, _ = fmt.Fprintf(w, "      %s\n", signal)
 		}
 		if action.Finding.Confidence != "" && action.Finding.Confidence != "high" {
 			_, _ = fmt.Fprintf(w, "      confidence %s\n", action.Finding.Confidence)
 		}
-		if len(action.CoverageWarnings) > 0 {
-			_, _ = fmt.Fprintf(w, "      coverage warning: %s\n", cliui.Truncate(action.CoverageWarnings[0], 110))
+		warnings := action.CoverageWarnings
+		if action.Episode != nil {
+			warnings = actionview.EpisodeWarnings(*action.Episode)
+		}
+		if len(warnings) > 0 {
+			_, _ = fmt.Fprintf(w, "      coverage warning: %s\n", cliui.Truncate(warnings[0], 110))
 		}
 		_, _ = fmt.Fprintln(w)
 	}
@@ -122,11 +126,7 @@ func actionClassificationLabel(action actionview.Action, clr cliui.Colorizer) st
 	symbol := "?"
 	switch action.Finding.Classification {
 	case residual.Matched:
-		if len(action.Detections) > 0 {
-			symbol = "⚠"
-		} else {
-			symbol = "✓"
-		}
+		symbol = "✓"
 	case residual.ReportedNotObserved:
 		symbol = "✕"
 	case residual.Blocked:
@@ -135,7 +135,7 @@ func actionClassificationLabel(action actionview.Action, clr cliui.Colorizer) st
 		symbol = "?"
 	}
 	label := symbol + " " + classification
-	if clr.Enabled && (action.Finding.Classification != residual.Matched || len(action.Detections) > 0) {
+	if clr.Enabled && action.Finding.Classification != residual.Matched {
 		return clr.Warn(label)
 	}
 	return label
@@ -145,50 +145,87 @@ func agentCoverageMark(meta runs.Meta) string {
 	if meta.Coverage.Agent.Capture == "complete" && meta.Coverage.Agent.Interpretation == "complete" {
 		return "✓"
 	}
-	return coverageValue(meta.Coverage.Agent.Capture)
+	states := []string{meta.Coverage.Agent.Capture, meta.Coverage.Agent.Interpretation}
+	for _, state := range states {
+		normalized := strings.ToLower(strings.TrimSpace(state))
+		if normalized != "complete" && normalized != "not_applicable" && normalized != "unavailable" {
+			return coverageMark(state)
+		}
+	}
+	for _, state := range states {
+		if strings.EqualFold(strings.TrimSpace(state), "unavailable") {
+			return "unavailable"
+		}
+	}
+	return "—"
 }
 
 func kernelCoverageMark(coverage runs.KernelCoverage) string {
-	if coverage.Capture == "complete" {
+	state := kernelCoverageState(coverage)
+	if state == "complete" {
 		return "✓"
 	}
-	return coverageValue(coverage.Capture)
+	return coverageMark(state)
+}
+
+func kernelCoverageState(coverage runs.KernelCoverage) string {
+	if strings.TrimSpace(coverage.Capture) != "" {
+		return coverage.Capture
+	}
+	if strings.EqualFold(strings.TrimSpace(coverage.Availability), "unavailable") {
+		return "unavailable"
+	}
+	return coverage.Capture
+}
+
+func coverageMark(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "complete":
+		return "✓"
+	case "not_applicable":
+		return "—"
+	case "unavailable":
+		return "unavailable"
+	case "partial":
+		return "⚠ partial"
+	case "":
+		return "⚠ unknown"
+	default:
+		return "⚠ " + value
+	}
 }
 
 func coverageValue(value string) string {
-	if strings.TrimSpace(value) == "" {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
 		return "unknown"
+	case "not_applicable":
+		return "not applicable"
+	default:
+		return value
 	}
-	return value
 }
 
-type detectionGroup struct {
-	Severity string
-	RuleID   string
-	Message  string
-	Count    int
-	FirstTS  int64
+type detectionGroupLocationInfo struct {
 	Actions  map[int]struct{}
 	RunLevel bool
 }
 
 func renderAgentDetectionGroups(w io.Writer, view actionview.Run, limit int, tsMode cliui.TSMode, clr cliui.Colorizer) {
-	groups := make(map[string]*detectionGroup)
+	var detections []actionview.Detection
+	locations := make(map[string]*detectionGroupLocationInfo)
 	add := func(d actionview.Detection, action int) {
-		key := d.Severity + "\x00" + d.RuleID + "\x00" + d.Message
-		group := groups[key]
-		if group == nil {
-			group = &detectionGroup{Severity: d.Severity, RuleID: d.RuleID, Message: d.Message, FirstTS: d.TS, Actions: make(map[int]struct{})}
-			groups[key] = group
-		}
-		group.Count++
-		if d.TS < group.FirstTS {
-			group.FirstTS = d.TS
+		detections = append(detections, d)
+		key := detectionPresentationKey(d)
+		location := locations[key]
+		if location == nil {
+			location = &detectionGroupLocationInfo{Actions: make(map[int]struct{})}
+			locations[key] = location
 		}
 		if action > 0 {
-			group.Actions[action] = struct{}{}
+			location.Actions[action] = struct{}{}
 		} else {
-			group.RunLevel = true
+			location.RunLevel = true
 		}
 	}
 	for _, action := range view.Actions {
@@ -199,20 +236,7 @@ func renderAgentDetectionGroups(w io.Writer, view actionview.Run, limit int, tsM
 	for _, detection := range view.RunLevelDetections {
 		add(detection, 0)
 	}
-	ordered := make([]*detectionGroup, 0, len(groups))
-	for _, group := range groups {
-		ordered = append(ordered, group)
-	}
-	sort.Slice(ordered, func(i, j int) bool {
-		left, right := severityWeight(ordered[i].Severity), severityWeight(ordered[j].Severity)
-		if left != right {
-			return left > right
-		}
-		if ordered[i].Count != ordered[j].Count {
-			return ordered[i].Count > ordered[j].Count
-		}
-		return ordered[i].RuleID < ordered[j].RuleID
-	})
+	ordered := actionview.GroupDetections(detections)
 	_, _ = fmt.Fprintf(w, "\nDetections\n%s\n", strings.Repeat("─", 60))
 	if len(ordered) == 0 {
 		_, _ = fmt.Fprintln(w, "  (none)")
@@ -223,7 +247,7 @@ func renderAgentDetectionGroups(w io.Writer, view actionview.Run, limit int, tsM
 		shown = limit
 	}
 	for _, group := range ordered[:shown] {
-		where := detectionGroupLocation(group)
+		where := detectionGroupLocation(locations[detectionGroupKey(group)])
 		severity := strings.ToUpper(group.Severity)
 		if clr.Enabled {
 			severity = clr.Severity(severity)
@@ -239,7 +263,7 @@ func renderAgentDetectionGroups(w io.Writer, view actionview.Run, limit int, tsM
 	}
 }
 
-func detectionGroupLocation(group *detectionGroup) string {
+func detectionGroupLocation(group *detectionGroupLocationInfo) string {
 	indexes := make([]int, 0, len(group.Actions))
 	for index := range group.Actions {
 		indexes = append(indexes, index)
@@ -255,17 +279,46 @@ func detectionGroupLocation(group *detectionGroup) string {
 	return strings.Join(parts, ", ")
 }
 
+func detectionPresentationKey(detection actionview.Detection) string {
+	return strings.ToLower(strings.TrimSpace(detection.Severity)) + "\x00" + detection.RuleID + "\x00" + detection.Message
+}
+
+func detectionGroupKey(group actionview.DetectionGroup) string {
+	return group.Severity + "\x00" + group.RuleID + "\x00" + group.Message
+}
+
+func actionDetectionSignal(detections []actionview.Detection) string {
+	if len(detections) == 0 {
+		return ""
+	}
+	highest := "unknown"
+	weight := -1
+	for _, detection := range detections {
+		if candidate := severityWeight(detection.Severity); candidate > weight {
+			weight = candidate
+			highest = strings.ToUpper(strings.TrimSpace(detection.Severity))
+			if highest == "" {
+				highest = "UNKNOWN"
+			}
+		}
+	}
+	if len(detections) == 1 {
+		return fmt.Sprintf("⚠ 1 %s detection", highest)
+	}
+	return fmt.Sprintf("⚠ %d detections · highest %s", len(detections), highest)
+}
+
 func detectionSummary(view actionview.Run) string {
 	counts := make(map[string]int)
 	total := 0
 	for _, action := range view.Actions {
 		for _, detection := range action.Detections {
-			counts[detection.Severity]++
+			counts[strings.ToLower(strings.TrimSpace(detection.Severity))]++
 			total++
 		}
 	}
 	for _, detection := range view.RunLevelDetections {
-		counts[detection.Severity]++
+		counts[strings.ToLower(strings.TrimSpace(detection.Severity))]++
 		total++
 	}
 	if total == 0 {

@@ -46,4 +46,5 @@ type NetWhen struct {
 type ExecWhen struct {
 	ContainsAll []string `yaml:"contains_all"`
 	ContainsAny []string `yaml:"contains_any"`
+	BasenameIn  []string `yaml:"basename_in"`
 }

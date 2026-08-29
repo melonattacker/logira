@@ -104,6 +104,42 @@ rules:
 	}
 }
 
+func TestLoadRulesYAMLExecBasenameInNormalizationAndValidation(t *testing.T) {
+	rules, err := LoadRulesYAML([]byte(`
+rules:
+  - id: "X910"
+    title: "basename"
+    type: "exec"
+    severity: "low"
+    when:
+      exec:
+        basename_in: [" NC ", "/usr/bin/SoCat"]
+    message: "basename"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"nc", "socat"}
+	if got := rules[0].When.Exec.BasenameIn; len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("basename_in=%v, want %v", got, want)
+	}
+
+	_, err = LoadRulesYAML([]byte(`
+rules:
+  - id: "X911"
+    title: "empty basename"
+    type: "exec"
+    severity: "low"
+    when:
+      exec:
+        basename_in: [" "]
+    message: "basename"
+`))
+	if err == nil {
+		t.Fatal("expected empty basename_in value to be rejected")
+	}
+}
+
 func TestCompilePathRegex_HomeExpansion(t *testing.T) {
 	re, err := compilePathRegex("^$HOME/\\.ssh/id_ed25519$", "/home/u")
 	if err != nil {

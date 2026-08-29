@@ -279,20 +279,86 @@ func TestEngine_Evaluate_DSL_NetPortInAndIPIn(t *testing.T) {
 	}
 }
 
-func TestEngine_Evaluate_DSL_ExecContainsAny(t *testing.T) {
+func TestEngine_Evaluate_E014ExactExecutableBasenames(t *testing.T) {
 	e := mustEngine(t, "/home/u")
 
-	execDetail, _ := json.Marshal(model.ExecDetail{Filename: "/usr/bin/socat", Argv: []string{"socat", "TCP:1.2.3.4:4444"}})
-	ds := e.Evaluate(storage.TypeExec, execDetail)
-	found := false
-	for _, d := range ds {
-		if d.RuleID == "E014" {
-			found = true
-			break
+	tests := []struct {
+		name   string
+		detail model.ExecDetail
+		want   bool
+	}{
+		{name: "nc", detail: model.ExecDetail{Filename: "/usr/bin/nc", Argv: []string{"nc", "example.com", "4444"}}, want: true},
+		{name: "ncat", detail: model.ExecDetail{Filename: "/usr/bin/ncat", Argv: []string{"ncat", "example.com"}}, want: true},
+		{name: "netcat", detail: model.ExecDetail{Filename: "/usr/bin/netcat", Argv: []string{"netcat", "example.com"}}, want: true},
+		{name: "socat", detail: model.ExecDetail{Filename: "/usr/bin/socat", Argv: []string{"socat", "TCP:1.2.3.4:4444"}}, want: true},
+		{name: "filename wins over argv zero", detail: model.ExecDetail{Filename: "/usr/bin/go", Argv: []string{"nc", "vet", "./..."}}},
+		{name: "go vet nilfunc", detail: model.ExecDetail{Filename: "/usr/local/go/pkg/tool/linux_amd64/vet", Argv: []string{"vet", "-nilfunc", "-printf"}}},
+		{name: "argument substring", detail: model.ExecDetail{Filename: "/usr/bin/bash", Argv: []string{"bash", "-lc", "echo socat ncat nc netcat"}}},
+		{name: "argv fallback", detail: model.ExecDetail{Argv: []string{"/opt/tools/NC", "example.com"}}, want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, _ := json.Marshal(tc.detail)
+			found := false
+			for _, detection := range e.Evaluate(storage.TypeExec, payload) {
+				found = found || detection.RuleID == "E014"
+			}
+			if found != tc.want {
+				t.Fatalf("E014 found=%v, want %v", found, tc.want)
+			}
+		})
+	}
+}
+
+func TestEngine_Evaluate_ExecConditionFamiliesAreCombined(t *testing.T) {
+	rules, err := LoadRulesYAML([]byte(`
+rules:
+  - id: "X902"
+    title: "Exact tool with flag"
+    type: "exec"
+    severity: "low"
+    when:
+      exec:
+        basename_in: [" NC "]
+        contains_any: ["--listen"]
+    message: "matched"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := NewEngineWithRules("/home/u", rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		detail model.ExecDetail
+		want   bool
+	}{
+		{model.ExecDetail{Filename: "/usr/bin/nc", Argv: []string{"nc", "--listen"}}, true},
+		{model.ExecDetail{Filename: "/usr/bin/nc", Argv: []string{"nc", "example.com"}}, false},
+		{model.ExecDetail{Filename: "/usr/bin/bash", Argv: []string{"bash", "--listen"}}, false},
+	} {
+		payload, _ := json.Marshal(tc.detail)
+		matched := len(engine.Evaluate(storage.TypeExec, payload)) == 1
+		if matched != tc.want {
+			t.Fatalf("detail=%+v matched=%v, want %v", tc.detail, matched, tc.want)
 		}
 	}
-	if !found {
-		t.Fatalf("expected E014, got %+v", ds)
+}
+
+func TestEngine_ExecBasenameInIsNormalizedAndDefensivelyCopied(t *testing.T) {
+	basenames := []string{" NC "}
+	engine, err := NewEngineWithRules("/home/u", []Rule{{
+		ID: "X903", Type: storage.TypeExec, Severity: "low", Message: "matched",
+		When: WhenClause{Exec: &ExecWhen{BasenameIn: basenames}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	basenames[0] = "bash"
+	payload, _ := json.Marshal(model.ExecDetail{Filename: "/usr/bin/nc", Argv: []string{"nc"}})
+	if detections := engine.Evaluate(storage.TypeExec, payload); len(detections) != 1 || detections[0].RuleID != "X903" {
+		t.Fatalf("normalized copied basename did not match: %+v", detections)
 	}
 }
 

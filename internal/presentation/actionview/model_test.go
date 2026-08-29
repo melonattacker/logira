@@ -70,6 +70,34 @@ func TestAmbiguousExactMembershipRemainsRunLevel(t *testing.T) {
 	}
 }
 
+func TestAgentSequenceIsNotDetectionMembership(t *testing.T) {
+	run := Run{
+		Report:  residual.Report{Episodes: []residual.ExecutionEpisode{{AgentSeq: 7, ExecMembers: []residual.ExecMember{{Seq: 8}}}}},
+		Actions: []Action{{episodeIndex: 0}},
+	}
+	attributeDetections(&run, []storage.Event{detectionEvent(9, 20, "AGENT", 7)})
+	if len(run.RunLevelDetections) != 1 || len(run.Actions[0].Detections) != 0 {
+		t.Fatalf("agent runtime sequence was used as episode membership: %+v", run)
+	}
+}
+
+func TestProcessForkAndExitSequencesAreExactDetectionMembership(t *testing.T) {
+	run := Run{
+		Report: residual.Report{Episodes: []residual.ExecutionEpisode{{
+			ProcessMembers: []residual.ProcessMember{{ForkSeq: 30, ExitSeq: 31}},
+		}}},
+		Actions: []Action{{episodeIndex: 0}},
+	}
+	attributeDetections(&run, []storage.Event{
+		detectionEvent(40, 20, "FORK", 30),
+		detectionEvent(41, 21, "EXIT", 31),
+		detectionEvent(42, 22, "OTHER", 32),
+	})
+	if len(run.Actions[0].Detections) != 2 || len(run.RunLevelDetections) != 1 || run.RunLevelDetections[0].RuleID != "OTHER" {
+		t.Fatalf("process sequence attribution=%+v run-level=%+v", run.Actions[0].Detections, run.RunLevelDetections)
+	}
+}
+
 func TestResolveActionByOrdinalAndItemID(t *testing.T) {
 	run := Run{Actions: []Action{{Index: 1, ActionID: "item_a", ItemID: "item_a"}, {Index: 2, ActionID: "item_b", ItemID: "item_b"}}}
 	for selector, want := range map[string]int{"1": 1, "2": 2, "item_b": 2} {
@@ -96,6 +124,51 @@ func TestBuildReportsPartialCoverageHonestly(t *testing.T) {
 	}
 	if len(view.CoverageWarnings) == 0 || len(view.Actions[0].CoverageWarnings) == 0 {
 		t.Fatalf("coverage warnings missing: %+v", view)
+	}
+}
+
+func TestCoverageWarningsTreatNeutralStatesAsNeutral(t *testing.T) {
+	meta := completeMeta()
+	meta.Coverage.Network.Capture = "not_applicable"
+	meta.Coverage.File.Capture = ""
+	meta.Coverage.File.Availability = "unavailable"
+	if warnings := CoverageWarnings(meta); len(warnings) != 0 {
+		t.Fatalf("neutral capture states warned: %v", warnings)
+	}
+	meta.Coverage.Process.KnownLoss.SessionQueueDropped = 2
+	if warnings := CoverageWarnings(meta); len(warnings) != 1 || !strings.Contains(warnings[0], "2 known lost") {
+		t.Fatalf("known loss warning=%v", warnings)
+	}
+}
+
+func TestEpisodeWarningsFiltersOnlyNeutralCaptureBoilerplate(t *testing.T) {
+	episode := residual.ExecutionEpisode{
+		ProcessCapture: "partial", FileCapture: "unavailable", NetworkCapture: "not_applicable",
+		AttributionIssues: []string{
+			"process capture is not complete; episode membership may be incomplete",
+			"file capture is not complete; attributed file effects may be incomplete",
+			"network capture is not complete; attributed network effects may be incomplete",
+			"direct match parent exec was not observed",
+		},
+	}
+	warnings := EpisodeWarnings(episode)
+	if len(warnings) != 2 || !strings.Contains(warnings[0], "process capture") || !strings.Contains(warnings[1], "parent exec") {
+		t.Fatalf("filtered warnings=%v", warnings)
+	}
+	if len(episode.AttributionIssues) != 4 {
+		t.Fatalf("episode was mutated: %v", episode.AttributionIssues)
+	}
+}
+
+func TestGroupDetectionsUsesExactIdentityAndStablePriority(t *testing.T) {
+	groups := GroupDetections([]Detection{
+		{Severity: " medium ", RuleID: "E2", Message: "same"},
+		{Severity: "MEDIUM", RuleID: "E2", Message: "same"},
+		{Severity: "high", RuleID: "E1", Message: "urgent"},
+		{Severity: "medium", RuleID: "E2", Message: "different"},
+	})
+	if len(groups) != 3 || groups[0].RuleID != "E1" || groups[1].Count != 2 || groups[1].Message != "same" {
+		t.Fatalf("groups=%+v", groups)
 	}
 }
 

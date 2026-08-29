@@ -65,7 +65,7 @@ type runtimeAction struct {
 // details and conservative detection attribution.
 func Build(meta runs.Meta, events []storage.Event) (Run, error) {
 	report := residual.Analyze(meta, events)
-	out := Run{Meta: meta, Report: report, CoverageWarnings: runCoverageWarnings(meta)}
+	out := Run{Meta: meta, Report: report, CoverageWarnings: CoverageWarnings(meta)}
 	runtimeActions := collectRuntimeActions(events)
 
 	findingsByItem := make(map[string]int)
@@ -180,7 +180,6 @@ func attributeDetections(run *Run, events []storage.Event) {
 		memberships[seq][episodeIndex] = struct{}{}
 	}
 	for episodeIndex, episode := range run.Report.Episodes {
-		add(episode.AgentSeq, episodeIndex)
 		for _, member := range episode.ExecMembers {
 			add(member.Seq, episodeIndex)
 		}
@@ -237,20 +236,46 @@ func attributeDetections(run *Run, events []storage.Event) {
 	}
 }
 
-func runCoverageWarnings(meta runs.Meta) []string {
+// CoverageWarnings returns presentation-level warnings for partial, unknown,
+// or known-loss capture while leaving neutral unavailable/not-applicable
+// states alone.
+func CoverageWarnings(meta runs.Meta) []string {
 	warnings := make([]string, 0, 4)
-	if meta.Coverage.Agent.Capture != "complete" || meta.Coverage.Agent.Interpretation != "complete" {
+	if coverageWarns(meta.Coverage.Agent.Capture) || coverageWarns(meta.Coverage.Agent.Interpretation) {
 		warnings = append(warnings, fmt.Sprintf("agent telemetry capture=%s interpretation=%s", valueOrUnknown(meta.Coverage.Agent.Capture), valueOrUnknown(meta.Coverage.Agent.Interpretation)))
 	}
 	for _, item := range []struct {
 		name string
 		data runs.KernelCoverage
 	}{{"process", meta.Coverage.Process}, {"file", meta.Coverage.File}, {"network", meta.Coverage.Network}} {
-		if item.data.Capture != "complete" {
-			warnings = append(warnings, fmt.Sprintf("%s telemetry capture=%s", item.name, valueOrUnknown(item.data.Capture)))
+		capture := effectiveKernelCapture(item.data)
+		if coverageWarns(capture) {
+			warnings = append(warnings, fmt.Sprintf("%s telemetry capture=%s", item.name, valueOrUnknown(capture)))
+		}
+		if lost := item.data.KnownLoss.Total(); lost > 0 {
+			warnings = append(warnings, fmt.Sprintf("%s telemetry reports %d known lost observations", item.name, lost))
 		}
 	}
 	return warnings
+}
+
+func effectiveKernelCapture(coverage runs.KernelCoverage) string {
+	if strings.TrimSpace(coverage.Capture) != "" {
+		return coverage.Capture
+	}
+	if strings.EqualFold(strings.TrimSpace(coverage.Availability), "unavailable") {
+		return "unavailable"
+	}
+	return coverage.Capture
+}
+
+func coverageWarns(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "complete", "not_applicable", "unavailable":
+		return false
+	default:
+		return true
+	}
 }
 
 func valueOrUnknown(value string) string {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
@@ -146,7 +147,7 @@ func validateAndCompileRule(r *Rule) error {
 		if r.When.Exec == nil {
 			return fmt.Errorf("missing when.exec")
 		}
-		if err := validateExecWhen(*r.When.Exec); err != nil {
+		if err := validateExecWhen(r.When.Exec); err != nil {
 			return err
 		}
 	}
@@ -251,7 +252,14 @@ func validateNetWhen(w NetWhen) error {
 	return nil
 }
 
-func validateExecWhen(w ExecWhen) error {
-	// No exclusive rules; allow contains_all and contains_any to coexist.
+func validateExecWhen(w *ExecWhen) error {
+	// No exclusive rules; configured condition families are combined with AND.
+	for i, raw := range w.BasenameIn {
+		basename := strings.ToLower(strings.TrimSpace(raw))
+		if basename == "" {
+			return fmt.Errorf("exec.when: basename_in contains empty value")
+		}
+		w.BasenameIn[i] = filepath.Base(filepath.Clean(basename))
+	}
 	return nil
 }

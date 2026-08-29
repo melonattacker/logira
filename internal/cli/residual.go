@@ -15,6 +15,7 @@ import (
 
 	"github.com/melonattacker/logira/internal/analyzer/residual"
 	"github.com/melonattacker/logira/internal/cliui"
+	"github.com/melonattacker/logira/internal/presentation/actionview"
 	"github.com/melonattacker/logira/internal/runs"
 	"github.com/melonattacker/logira/internal/storage"
 )
@@ -248,7 +249,7 @@ func renderExecutionEpisode(episode residual.ExecutionEpisode, verbose bool) {
 
 	renderEpisodeFileEffects(episode.FileEffects, verbose)
 	renderEpisodeNetworkEffects(episode.NetworkEffects, verbose)
-	for _, issue := range episode.AttributionIssues {
+	for _, issue := range actionview.EpisodeWarnings(episode) {
 		stdoutf("  attribution: %s\n", issue)
 	}
 }

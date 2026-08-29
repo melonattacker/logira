@@ -311,7 +311,7 @@ rules:
     severity: "medium"
     when:
       exec:
-        contains_any: ["socat", "ncat", "nc "]
+        basename_in: ["nc", "ncat", "netcat", "socat"]
     message: "potential tunnel or reverse shell tool executed: {{exec.filename}}"
 
   - id: "E015"

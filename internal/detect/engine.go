@@ -75,6 +75,10 @@ func cloneRule(in Rule) Rule {
 		x := *in.When.Exec
 		x.ContainsAll = append([]string{}, in.When.Exec.ContainsAll...)
 		x.ContainsAny = append([]string{}, in.When.Exec.ContainsAny...)
+		x.BasenameIn = append([]string{}, in.When.Exec.BasenameIn...)
+		for i, basename := range x.BasenameIn {
+			x.BasenameIn[i] = strings.ToLower(filepath.Base(filepath.Clean(strings.TrimSpace(basename))))
+		}
 		out.When.Exec = &x
 	}
 	return out
@@ -231,6 +235,11 @@ func (e *Engine) evalNetRules(rs []Rule, d model.NetDetail) []storage.Detection 
 
 func (e *Engine) evalExecRules(rs []Rule, d model.ExecDetail) []storage.Detection {
 	s := strings.ToLower(strings.TrimSpace(d.Filename + " " + strings.Join(d.Argv, " ")))
+	filename := strings.TrimSpace(d.Filename)
+	if filename == "" && len(d.Argv) > 0 {
+		filename = strings.TrimSpace(d.Argv[0])
+	}
+	basename := strings.ToLower(filepath.Base(filepath.Clean(filename)))
 
 	out := make([]storage.Detection, 0, 1)
 	for _, r := range rs {
@@ -267,6 +276,9 @@ func (e *Engine) evalExecRules(rs []Rule, d model.ExecDetail) []storage.Detectio
 			if !ok {
 				continue
 			}
+		}
+		if len(w.BasenameIn) > 0 && !stringInSlice(basename, w.BasenameIn) {
+			continue
 		}
 
 		msg := e.renderMessage(r, map[string]any{
