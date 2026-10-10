@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/melonattacker/logira/internal/model"
@@ -74,6 +75,28 @@ func TestAgentWorkflowJSONCompatibility(t *testing.T) {
 	if inspectDoc.Action.Index != 1 || inspectDoc.Action.ActionID != "item_1" {
 		t.Fatalf("unexpected inspect identity: %+v", inspectDoc.Action)
 	}
+
+	reportPath := filepath.Join(home, "agent-report.html")
+	reportStdout := captureCommandStdout(t, func() error {
+		return ReportCommand(context.Background(), []string{runID, "--html", "--output", reportPath})
+	})
+	wantPath, _ := filepath.Abs(reportPath)
+	if reportStdout != wantPath+"\n" {
+		t.Fatalf("report stdout=%q, want path only %q", reportStdout, wantPath+"\n")
+	}
+	reportData, err := os.ReadFile(reportPath) //nolint:gosec // Fixed report filename under t.TempDir(), not user input.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(reportData), "<!doctype html>") || !strings.Contains(string(reportData), "echo hi") {
+		t.Fatalf("unexpected report content:\n%s", reportData)
+	}
+	if err := ReportCommand(context.Background(), []string{runID, "--output", reportPath}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("report collision error=%v", err)
+	}
+	_ = captureCommandStdout(t, func() error {
+		return ReportCommand(context.Background(), []string{runID, "--output", reportPath, "--force"})
+	})
 }
 
 func captureCommandStdout(t *testing.T, fn func() error) string {

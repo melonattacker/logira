@@ -48,6 +48,9 @@ func realMain() int {
 	case "inspect":
 		args = normalizeSubcommandHelpArgs(args)
 		err = cli.InspectCommand(ctx, args)
+	case "report":
+		args = normalizeSubcommandHelpArgs(args)
+		err = cli.ReportCommand(ctx, args)
 	case "query":
 		args = normalizeSubcommandHelpArgs(args)
 		err = cli.QueryCommand(ctx, args)
@@ -122,6 +125,9 @@ func runHelp(ctx context.Context, prog string, args []string) int {
 	case "inspect":
 		_ = cli.InspectCommand(ctx, []string{"-h"})
 		return 0
+	case "report":
+		_ = cli.ReportCommand(ctx, []string{"-h"})
+		return 0
 	case "query":
 		_ = cli.QueryCommand(ctx, []string{"-h"})
 		return 0
@@ -150,6 +156,7 @@ func printRootHelp(w io.Writer, prog string) {
 	_, _ = fmt.Fprintln(w, "  runs       List saved runs.")
 	_, _ = fmt.Fprintln(w, "  view       View a run summary (default: last).")
 	_, _ = fmt.Fprintln(w, "  inspect    Inspect one agent action and its observed evidence.")
+	_, _ = fmt.Fprintln(w, "  report     Generate a standalone local HTML report.")
 	_, _ = fmt.Fprintln(w, "  query      Query events in a run (default: last).")
 	_, _ = fmt.Fprintln(w, "  explain    Explain detections for a run (default: last).")
 	_, _ = fmt.Fprintln(w, "  residual   Compare runtime-reported and kernel-observed actions.")
@@ -161,6 +168,7 @@ func printRootHelp(w io.Writer, prog string) {
 	_, _ = fmt.Fprintf(w, "  %s runs\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s view last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s inspect last action:1\n", prog)
+	_, _ = fmt.Fprintf(w, "  %s report last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s query --run last --type net --dest 93.184.216.34:443\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s explain last\n", prog)
 	_, _ = fmt.Fprintf(w, "  %s residual last\n\n", prog)

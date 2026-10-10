@@ -142,6 +142,7 @@ or user intent:
 ./logira run --agent codex -- codex exec --json "Inspect this repository"
 ./logira view last
 ./logira inspect last action:1
+./logira report last
 ./logira query last --type detection
 ```
 
@@ -207,9 +208,14 @@ Query events:
 - `logira runs`: list saved runs
 - `logira view [last|<run-id>]`: agent-action summary for completed Codex runs; run dashboard otherwise (`--raw` retains legacy text)
 - `logira inspect [last|<run-id>] action:<ordinal-or-item-id>`: inspect one reported command and its correlated execution episode
+- `logira report [last|<run-id>] [--html] [-o|--output <path>] [--force]`: generate one standalone offline HTML report for a completed Codex agent run
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
 - `logira residual [last|<run-id>] [--effects [--verbose]]`: experimental runtime-to-kernel consistency report and optional execution-episode inspection for agent-enabled runs
+
+HTML reporting v0 is action-first and supports completed Codex agent runs only. It writes
+`./logira-report-<run-id>.html` by default, refuses to replace an existing file unless
+`--force` is supplied, and returns a clear error for active, non-agent, or unsupported-provider runs.
 
 Rules:
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)

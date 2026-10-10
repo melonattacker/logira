@@ -4,3 +4,4 @@ demos/*_test.jsonl
 /logirad
 !internal/logirad/
 tmp/
+/logira-report-*.html

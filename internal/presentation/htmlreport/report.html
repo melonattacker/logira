@@ -1,0 +1,175 @@
+{{define "executionTree"}}{{if .}}<ul class="exec-tree">{{range .}}<li><div class="exec-line">{{if .Detected}}<span class="finding-mark" title="Detection-linked">⚠</span>{{end}}<code>{{.Label}}</code>{{if gt .GroupCount 0}} <span class="count">×{{.GroupCount}}</span>{{end}} <span class="role">{{.Role}}</span></div>{{if .Executable}}<div class="executable">Executable: <code>{{.Executable}}</code></div>{{end}}{{if .Children}}{{template "executionTree" .Children}}{{end}}</li>{{end}}</ul>{{else}}<p class="empty">No execution observations in this episode.</p>{{end}}{{end}}
+{{define "fullExecutionTree"}}{{if .}}<ul class="exec-tree full">{{range .}}<li><div class="exec-line">{{if .Detected}}<span class="finding-mark" title="Detection-linked">⚠</span>{{end}}<code>{{.Label}}</code> <span class="role">{{.Role}}</span></div><div class="identifiers">seq={{.Seq}} · pid={{.PID}} · generation={{.Generation}}{{if .ParentSeq}} · parent_seq={{.ParentSeq}}{{end}}{{if .CWD}} · cwd=<code>{{.CWD}}</code>{{end}}{{if .Filename}} · executable=<code>{{.Filename}}</code>{{end}}</div>{{if .Children}}{{template "fullExecutionTree" .Children}}{{end}}</li>{{end}}</ul>{{else}}<p class="empty">No execution observations in this episode.</p>{{end}}{{end}}
+{{define "fileRows"}}{{range .}}<tr><td>{{if .Detected}}<span class="finding-mark" title="Detection-linked">⚠</span>{{end}}{{.Category}}</td><td><span class="op">{{.Op}}</span></td><td><code>{{.Path}}</code>{{if .AttributionIncomplete}} <span class="tag warning">incomplete attribution</span>{{end}}</td><td class="numeric">{{.Count}}</td></tr>{{end}}{{end}}
+{{define "networkRows"}}{{range .}}<tr><td>{{if .Detected}}<span class="finding-mark" title="Detection-linked">⚠</span>{{end}}{{.Op}}</td><td>{{.Proto}}</td><td><code>{{.Destination}}</code>{{if .Unknown}} <span class="muted">(no destination observed)</span>{{end}}</td><td class="numeric">{{.Count}}</td><td class="numeric">{{.Bytes}}</td></tr>{{end}}{{end}}
+{{define "detectionGroups"}}{{range .}}<article class="detection {{.SeverityClass}}"><header><span class="severity">{{.Severity}}</span><code class="rule">{{.RuleID}}</code><span class="count">{{.Count}} occurrence{{if ne .Count 1}}s{{end}}</span></header><p>{{.Message}}</p><p class="muted">{{.Locations}}</p>{{if .Evidence}}<details class="nested"><summary>Representative evidence</summary><table><thead><tr><th>Seq</th><th>Type</th><th>Summary</th></tr></thead><tbody>{{range .Evidence}}<tr><td class="numeric">{{.Seq}}</td><td>{{.Type}}</td><td><code>{{.Summary}}</code></td></tr>{{end}}</tbody></table>{{if .EvidenceMore}}<p class="muted">{{.EvidenceMore}} additional evidence record(s) omitted; use the CLI handoff below.</p>{{end}}</details>{{end}}</article>{{end}}{{end}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Logira report — {{.RunID}}</title>
+  <style>
+    :root { color-scheme: light; --bg:#f4f5f6; --panel:#fff; --ink:#172027; --muted:#63717b; --line:#d9dee2; --good:#17653a; --good-bg:#eaf6ef; --warn:#8a5b00; --warn-bg:#fff5d9; --danger:#a12622; --danger-bg:#fdeceb; --info:#315a74; --info-bg:#eaf2f7; --code:#f1f3f4; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.48 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(1180px,calc(100% - 32px)); margin:32px auto 56px; }
+    h1,h2,h3,h4,p { margin-top:0; }
+    h1 { margin-bottom:4px; font-size:28px; letter-spacing:-.02em; }
+    h2 { margin:30px 0 12px; font-size:19px; }
+    h3 { margin:24px 0 10px; font-size:15px; text-transform:uppercase; letter-spacing:.05em; color:#42515b; }
+    h4 { margin:18px 0 8px; font-size:14px; }
+    code,pre,.numeric { font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; }
+    code { overflow-wrap:anywhere; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; background:var(--code); border:1px solid var(--line); border-radius:6px; max-height:420px; overflow:auto; }
+    .eyebrow { color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:.1em; font-size:12px; }
+    .run-command { padding:13px 15px; margin:18px 0; background:#202a31; color:#f8fafb; border-radius:7px; }
+    .panel,.action,.detection { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+    .panel { padding:18px; }
+    .overview-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .metric { background:var(--panel); padding:15px; min-height:86px; }
+    .metric .label { display:block; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:7px; }
+    .metric strong { font-size:16px; }
+    .coverage-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+    .coverage { border:1px solid var(--line); border-radius:6px; padding:10px 12px; background:var(--panel); }
+    .coverage .name { display:block; color:var(--muted); font-size:12px; }
+    .coverage .state { font-weight:700; }
+    .good { color:var(--good); }.warning { color:var(--warn); }.danger { color:var(--danger); }.neutral { color:var(--muted); }
+    .warning-box { padding:10px 12px; margin:8px 0; border-left:4px solid #c38a19; background:var(--warn-bg); color:#674500; }
+    .action { margin:10px 0; overflow:hidden; }
+    .action > summary { list-style:none; cursor:pointer; padding:15px 18px; }
+    .action > summary::-webkit-details-marker { display:none; }
+    .action > summary::before { content:"▸"; display:inline-block; margin-right:9px; color:var(--muted); }
+    .action[open] > summary::before { content:"▾"; }
+    .action-summary { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:start; }
+    .action-command { display:block; margin:8px 0 0 26px; font-size:14px; }
+    .summary-signals { display:flex; flex-wrap:wrap; gap:7px; justify-content:flex-end; }
+    .badge,.tag,.role,.op { display:inline-block; border-radius:999px; font-weight:700; font-size:11px; letter-spacing:.03em; padding:3px 8px; }
+    .badge.good { background:var(--good-bg); }.badge.warning,.tag.warning { background:var(--warn-bg); }.badge.danger { background:var(--danger-bg); }.badge.neutral { background:#eef0f2; }
+    .action-body { border-top:1px solid var(--line); padding:4px 18px 20px; }
+    .fact-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .fact { padding:9px 11px; background:#f7f8f9; border-radius:5px; }
+    .fact .label { display:block; font-size:11px; color:var(--muted); text-transform:uppercase; }
+    .dimensions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .dimension { border:1px solid var(--line); border-radius:6px; padding:13px; }
+    .dimension strong { display:block; margin-top:5px; }
+    details.nested { margin:12px 0; border:1px solid var(--line); border-radius:6px; padding:9px 11px; background:#fafbfb; }
+    details.nested > summary { cursor:pointer; font-weight:700; color:#33434d; }
+    .exec-tree { list-style:none; margin:8px 0; padding-left:19px; border-left:1px solid #cbd2d7; }
+    .exec-tree > li { position:relative; margin:7px 0; }
+    .exec-tree > li::before { content:""; position:absolute; left:-19px; top:11px; width:13px; border-top:1px solid #cbd2d7; }
+    .role { margin-left:5px; color:#52616b; background:#eef1f3; }
+    .executable,.identifiers { color:var(--muted); font-size:12px; margin:3px 0 0 2px; }
+    .finding-mark { color:var(--warn); font-weight:800; margin-right:5px; }
+    table { width:100%; border-collapse:collapse; margin:9px 0; table-layout:fixed; }
+    th,td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+    th { color:var(--muted); text-transform:uppercase; letter-spacing:.04em; font-size:11px; }
+    td.numeric,th.numeric { text-align:right; }
+    .detection { padding:13px 15px; margin:8px 0; border-left-width:5px; }
+    .detection.severity-high { border-left-color:var(--danger); }.detection.severity-medium { border-left-color:#c2810b; }.detection.severity-low { border-left-color:#8a7128; }.detection.severity-info { border-left-color:var(--info); }
+    .detection header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .severity { font-weight:800; }.severity-high .severity { color:var(--danger); }.severity-medium .severity { color:var(--warn); }
+    .rule { font-weight:800; }.count { color:var(--muted); font-size:12px; }
+    .detection p { margin:8px 0 0; }
+    .handoff { background:#202a31; color:#f7f9fa; border-radius:7px; padding:13px 15px; }
+    .handoff code { display:block; padding:3px 0; }
+    .muted,.empty { color:var(--muted); }
+    footer { margin-top:30px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px; font-size:12px; }
+    @media (max-width:850px) { .overview-grid,.coverage-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.fact-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.dimensions { grid-template-columns:1fr; }.action-summary { grid-template-columns:1fr; }.summary-signals { justify-content:flex-start; margin-left:26px; } }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } .panel,.action,.detection { break-inside:avoid; } details:not([open]) > :not(summary) { display:block !important; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Local audit report</div>
+    <h1>Logira Run</h1>
+    <div><code>{{.RunID}}</code></div>
+    <div class="run-command"><code>{{.Command}}</code></div>
+  </header>
+
+  <section class="overview-grid" aria-label="Run overview">
+    <div class="metric"><span class="label">Duration</span><strong>{{.Duration}}</strong><div class="muted">{{.Started}} – {{.Ended}}</div></div>
+    <div class="metric"><span class="label">Agent actions</span><strong>{{.ActionCount}}</strong></div>
+    <div class="metric"><span class="label">Consistency</span><strong>{{.Consistency}}</strong></div>
+    <div class="metric"><span class="label">Detections</span><strong>{{.DetectionSummary}}</strong></div>
+    <div class="metric"><span class="label">Report basis</span><strong>Action Residual</strong><div class="muted">Agent reports + OS evidence</div></div>
+  </section>
+
+  <h2>Telemetry coverage</h2>
+  <div class="coverage-grid">{{range .Coverage}}<div class="coverage"><span class="name">{{.Name}}</span><span class="state {{.Class}}">{{.Icon}} {{.Value}}</span></div>{{end}}</div>
+  {{range .CoverageWarnings}}<div class="warning-box">⚠ {{.}}</div>{{end}}
+
+  <h2>Agent actions</h2>
+  {{if .Actions}}{{range .Actions}}
+  <details class="action" {{if .Open}}open{{end}}>
+    <summary>
+      <div class="action-summary">
+        <div><strong>#{{.Index}}</strong><code class="action-command">{{.Command}}</code></div>
+        <div class="summary-signals">
+          <span class="badge {{.ClassificationClass}}">{{.ClassificationIcon}} {{.Classification}}</span>
+          <span class="badge {{.SecurityClass}}">Security: {{.SecuritySummary}}</span>
+          {{if .CoverageWarnings}}<span class="badge warning">⚠ Coverage warning</span>{{end}}
+        </div>
+      </div>
+    </summary>
+    <div class="action-body">
+      <div class="fact-grid">
+        <div class="fact"><span class="label">Runtime status</span>{{.Status}}{{if .Exit}} · exit {{.Exit}}{{end}}</div>
+        <div class="fact"><span class="label">Exec observations</span>{{if .HasEpisode}}{{.ExecCount}}{{else}}—{{end}}</div>
+        <div class="fact"><span class="label">Processes</span>{{if .HasEpisode}}{{.ProcessCount}}{{else}}—{{end}}</div>
+        <div class="fact"><span class="label">Effects</span>{{if .HasEpisode}}file {{.FileCount}} · network {{.NetworkCount}}{{else}}—{{end}}</div>
+      </div>
+
+      <h3>Runtime report</h3>
+      <p><code>{{.Command}}</code></p>
+      {{if .RuntimeText}}<details class="nested"><summary>Show retained runtime text</summary><pre>{{.RuntimeText}}</pre></details>{{else}}<p class="empty">No retained runtime text.</p>{{end}}
+      {{if .RawTruncated}}<div class="warning-box">The provider's retained raw record was truncated during ingestion.</div>{{end}}
+
+      <h3>Correlation and security</h3>
+      <div class="dimensions">
+        <div class="dimension"><span class="muted">Consistency</span><strong class="{{.ClassificationClass}}">{{.ClassificationIcon}} {{.Classification}}{{if .Confidence}} · {{.Confidence}} confidence{{end}}</strong>{{if .Reason}}<p>{{.Reason}}</p>{{end}}</div>
+        <div class="dimension"><span class="muted">Security</span><strong class="{{.SecurityClass}}">{{.SecuritySummary}}</strong><p>Deterministic detections do not replace the consistency classification.</p></div>
+      </div>
+
+      {{if .Episode}}
+      <h3>Execution</h3>
+      {{if .Episode.CollapsedInfrastructure}}<p class="muted">Codex sandbox infrastructure: {{.Episode.CollapsedInfrastructure}} exec observation(s) collapsed.</p>{{end}}
+      {{template "executionTree" .Episode.DefaultRoots}}
+      {{if .Episode.Large}}<p class="muted">{{.Episode.TotalExecs}} exec observations total{{if .Episode.GroupedLeaves}}; {{.Episode.GroupedLeaves}} repetitive leaf observations grouped{{end}}.</p>{{end}}
+      {{if eq .Episode.Ancestry.Value "incomplete"}}<div class="warning-box">? Parent execution was not observed for one or more episode members; no edge was inferred.</div>{{end}}
+      <details class="nested"><summary>Show full execution tree</summary>{{template "fullExecutionTree" .Episode.FullRoots}}</details>
+
+      <h3>File effects <span class="count">{{.Episode.Files.Total}} observations · {{.Episode.Files.GroupCount}} groups</span></h3>
+      {{if .Episode.Files.Initial}}<table><thead><tr><th>Priority</th><th>Operation</th><th>Path</th><th class="numeric">Count</th></tr></thead><tbody>{{template "fileRows" .Episode.Files.Initial}}</tbody></table>{{else}}<p class="empty">No file effects attributed to this episode.</p>{{end}}
+      {{if .Episode.Files.HasExpansion}}<details class="nested"><summary>Show grouped file evidence</summary><table><thead><tr><th>Priority</th><th>Operation</th><th>Path</th><th class="numeric">Count</th></tr></thead><tbody>{{template "fileRows" .Episode.Files.Expanded}}</tbody></table>{{if .Episode.Files.Omitted}}<p class="muted">{{.Episode.Files.Omitted}} additional group(s) omitted from HTML.</p>{{end}}</details>{{end}}
+
+      <h3>Network effects <span class="count">{{.Episode.Networks.Total}} observations · {{.Episode.Networks.GroupCount}} groups</span></h3>
+      {{if .Episode.Networks.Initial}}<table><thead><tr><th>Operation</th><th>Protocol</th><th>Destination</th><th class="numeric">Count</th><th class="numeric">Bytes</th></tr></thead><tbody>{{template "networkRows" .Episode.Networks.Initial}}</tbody></table>{{else}}<p class="empty">No network effects attributed to this episode.</p>{{end}}
+      {{if .Episode.Networks.HasExpansion}}<details class="nested"><summary>Show grouped network evidence</summary><table><thead><tr><th>Operation</th><th>Protocol</th><th>Destination</th><th class="numeric">Count</th><th class="numeric">Bytes</th></tr></thead><tbody>{{template "networkRows" .Episode.Networks.Expanded}}</tbody></table>{{if .Episode.Networks.Omitted}}<p class="muted">{{.Episode.Networks.Omitted}} additional group(s) omitted from HTML.</p>{{end}}</details>{{end}}
+
+      <h3>Detections</h3>
+      {{if .Episode.Detections}}{{template "detectionGroups" .Episode.Detections}}{{else}}<p class="empty">No detections were attributed to this action episode.</p>{{end}}
+
+      <h3>Telemetry</h3>
+      <div class="coverage-grid">{{range .Episode.Coverage}}<div class="coverage"><span class="name">{{.Name}}</span><span class="state {{.Class}}">{{.Icon}} {{.Value}}</span></div>{{end}}</div>
+      {{end}}
+
+      {{range .CoverageWarnings}}<div class="warning-box">⚠ {{.}}</div>{{end}}
+      <h3>Full evidence in the CLI</h3>
+      <div class="handoff"><code>{{.InspectCommand}}</code><code>{{.FileQueryCommand}}</code><code>{{.NetworkQueryCommand}}</code><code>{{.DetectionCommand}}</code></div>
+    </div>
+  </details>
+  {{end}}{{else}}<div class="panel empty">No Codex command_execution actions were captured.</div>{{end}}
+
+  <h2>Run-wide detections</h2>
+  {{if .Detections}}{{template "detectionGroups" .Detections}}{{else}}<div class="panel empty">No detections were retained for this run.</div>{{end}}
+
+  <h2>Other observations</h2>
+  {{if .OtherCounts}}<div class="panel">{{range .OtherCounts}}<p><code>{{.Classification}}</code> <strong>{{.Count}}</strong></p>{{end}}<details class="nested"><summary>Show factual findings</summary>{{range .OtherFindings}}<article><h4>{{.Classification}}{{if .Confidence}} · {{.Confidence}} confidence{{end}}</h4>{{if .Reported}}<p>Reported: <code>{{.Reported}}</code></p>{{end}}{{if .Observed}}<p>Observed: <code>{{.Observed}}</code></p>{{end}}{{if .Reason}}<p>{{.Reason}}</p>{{end}}</article>{{end}}</details></div>{{else}}<div class="panel empty">No unmatched residual findings.</div>{{end}}
+
+  <footer>This report describes observational consistency and deterministic detections. It does not judge intent, expectedness, safety, or maliciousness. JSONL and SQLite remain the source of truth.</footer>
+</main>
+</body>
+</html>

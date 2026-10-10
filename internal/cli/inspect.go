@@ -6,11 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -293,73 +290,17 @@ func truncateRuntimeOutput(output string, verbose bool) (string, bool) {
 	return joined, truncated
 }
 
-type execTreeNode struct {
-	member   residual.ExecMember
-	parent   *execTreeNode
-	children []*execTreeNode
-	hidden   bool
-	infra    string
-}
-
 func renderExecForest(w io.Writer, workspaceRoot, provider string, episode residual.ExecutionEpisode, detections []actionview.Detection, verbose bool) {
-	bySeq := make(map[int64]*execTreeNode, len(episode.ExecMembers))
-	nodes := make([]*execTreeNode, 0, len(episode.ExecMembers))
-	for _, member := range episode.ExecMembers {
-		node := &execTreeNode{member: member}
-		bySeq[member.Seq] = node
-		nodes = append(nodes, node)
+	trees := actionview.BuildExecutionTrees(workspaceRoot, provider, episode, detections)
+	roots := trees.DefaultRoots
+	if verbose {
+		roots = trees.FullRoots
+	} else if trees.CollapsedInfrastructure > 0 {
+		_, _ = fmt.Fprintf(w, "  [Codex sandbox infrastructure: %d exec observation(s) collapsed]\n", trees.CollapsedInfrastructure)
 	}
-	roots := make([]*execTreeNode, 0)
-	for _, node := range nodes {
-		if parent := bySeq[node.member.ParentExecSeq]; parent != nil && node.member.ParentExecSeq > 0 {
-			node.parent = parent
-			parent.children = append(parent.children, node)
-		}
-	}
-	detected := make(map[int64]bool)
-	for _, detection := range detections {
-		detected[detection.RelatedEventSeq] = true
-	}
-	collapsed := 0
-	if !verbose && strings.EqualFold(provider, "codex") {
-		for _, node := range nodes {
-			node.infra = codexInfrastructureKind(node, detected)
-			if node.infra != "" {
-				node.hidden = true
-				collapsed++
-			}
-		}
-	}
-	if collapsed > 0 {
-		_, _ = fmt.Fprintf(w, "  [Codex sandbox infrastructure: %d exec observation(s) collapsed]\n", collapsed)
-	}
-
-	// Rebuild only the presentation edges. Visible children are attached to the
-	// nearest visible ancestor; the stored ParentExecSeq forest is untouched.
-	for _, node := range nodes {
-		node.children = nil
-	}
-	for _, node := range nodes {
-		if node.hidden {
-			continue
-		}
-		parent := node.parent
-		for parent != nil && parent.hidden {
-			parent = parent.parent
-		}
-		if parent == nil {
-			roots = append(roots, node)
-		} else {
-			parent.children = append(parent.children, node)
-		}
-	}
-
-	large := !verbose && len(nodes) > 20
-	grouped := 0
-	var render func(*execTreeNode, string, string)
-	render = func(node *execTreeNode, prefix, connector string) {
-		_, _ = fmt.Fprintf(w, "  %s%s%s\n", prefix, connector, execTreeLabel(workspaceRoot, node.member, detected[node.member.Seq], verbose))
-		items := execTreeChildItems(node.children, detected, large)
+	var render func(*actionview.ExecutionTreeNode, string, string)
+	render = func(node *actionview.ExecutionTreeNode, prefix, connector string) {
+		_, _ = fmt.Fprintf(w, "  %s%s%s\n", prefix, connector, execTreeLabel(workspaceRoot, node.Member, node.Detected, verbose))
 		childPrefix := prefix
 		switch connector {
 		case "├─ ":
@@ -367,19 +308,18 @@ func renderExecForest(w io.Writer, workspaceRoot, provider string, episode resid
 		case "└─ ":
 			childPrefix += "   "
 		}
-		for i, item := range items {
-			last := i == len(items)-1
+		for i, child := range node.Children {
+			last := i == len(node.Children)-1
 			childConnector := "├─ "
 			if last {
 				childConnector = "└─ "
 			}
-			if item.groupCount > 0 {
-				grouped += item.groupCount
+			if child.GroupCount > 0 {
 				_, _ = fmt.Fprintf(w, "  %s%s%s ×%d  [%s]\n", childPrefix, childConnector,
-					execDisplayName(workspaceRoot, item.node.member, false), item.groupCount, item.node.member.Role)
+					execDisplayName(workspaceRoot, child.Member, false), child.GroupCount, child.Member.Role)
 				continue
 			}
-			render(item.node, childPrefix, childConnector)
+			render(child, childPrefix, childConnector)
 		}
 	}
 	for i, root := range roots {
@@ -388,97 +328,16 @@ func renderExecForest(w io.Writer, workspaceRoot, provider string, episode resid
 		}
 		render(root, "", "")
 	}
-	if large {
-		if grouped > 0 {
-			_, _ = fmt.Fprintf(w, "  %d exec observations total; %d repetitive leaf observations grouped; use --verbose for the original forest\n", len(nodes), grouped)
+	if !verbose && trees.Large {
+		if trees.GroupedLeafObservations > 0 {
+			_, _ = fmt.Fprintf(w, "  %d exec observations total; %d repetitive leaf observations grouped; use --verbose for the original forest\n", trees.TotalExecObservations, trees.GroupedLeafObservations)
 		} else {
-			_, _ = fmt.Fprintf(w, "  %d exec observations total; use --verbose for full paths and identifiers\n", len(nodes))
+			_, _ = fmt.Fprintf(w, "  %d exec observations total; use --verbose for full paths and identifiers\n", trees.TotalExecObservations)
 		}
 	}
-	if !episode.AncestryComplete {
+	if !trees.AncestryComplete {
 		_, _ = fmt.Fprintln(w, "  ? parent not observed for one or more episode members; no edge was inferred")
 	}
-}
-
-type execTreeItem struct {
-	node       *execTreeNode
-	groupCount int
-}
-
-func execTreeChildItems(children []*execTreeNode, detected map[int64]bool, enabled bool) []execTreeItem {
-	if !enabled {
-		items := make([]execTreeItem, 0, len(children))
-		for _, child := range children {
-			items = append(items, execTreeItem{node: child})
-		}
-		return items
-	}
-	counts := make(map[string]int)
-	for _, child := range children {
-		if key := execLeafGroupKey(child, detected); key != "" {
-			counts[key]++
-		}
-	}
-	emitted := make(map[string]bool)
-	items := make([]execTreeItem, 0, len(children))
-	for _, child := range children {
-		key := execLeafGroupKey(child, detected)
-		if key == "" || counts[key] < 3 {
-			items = append(items, execTreeItem{node: child})
-			continue
-		}
-		if emitted[key] {
-			continue
-		}
-		emitted[key] = true
-		items = append(items, execTreeItem{node: child, groupCount: counts[key]})
-	}
-	return items
-}
-
-func execLeafGroupKey(node *execTreeNode, detected map[int64]bool) string {
-	if node == nil || len(node.children) > 0 || detected[node.member.Seq] || node.member.Role != residual.ExecRoleDescendant {
-		return ""
-	}
-	filename := strings.TrimSpace(node.member.Filename)
-	if filename == "" {
-		return ""
-	}
-	return string(node.member.Role) + "\x00" + filepath.Clean(filename)
-}
-
-func codexInfrastructureKind(node *execTreeNode, detected map[int64]bool) string {
-	if node == nil || detected[node.member.Seq] || node.member.Role == residual.ExecRoleDirectMatch || strings.TrimSpace(node.member.Filename) == "" {
-		return ""
-	}
-	base := strings.ToLower(filepath.Base(filepath.Clean(node.member.Filename)))
-	switch base {
-	case "codex-linux-sandbox":
-		return "launcher"
-	case "bwrap":
-		if hasCodexInfrastructureAncestor(node.parent) {
-			return "bwrap"
-		}
-	case "true":
-		if node.parent != nil && node.parent.infra == "bwrap" {
-			return "probe"
-		}
-	case "codex":
-		if node.member.Role == residual.ExecRoleWrapper && len(node.member.Argv) > 0 &&
-			strings.EqualFold(filepath.Base(filepath.Clean(node.member.Argv[0])), "codex-linux-sandbox") && hasCodexInfrastructureAncestor(node.parent) {
-			return "wrapper"
-		}
-	}
-	return ""
-}
-
-func hasCodexInfrastructureAncestor(node *execTreeNode) bool {
-	for ; node != nil; node = node.parent {
-		if node.infra == "launcher" || node.infra == "bwrap" || node.infra == "wrapper" {
-			return true
-		}
-	}
-	return false
 }
 
 func execTreeLabel(workspaceRoot string, member residual.ExecMember, detected, verbose bool) string {
@@ -504,46 +363,7 @@ func execTreeLabel(workspaceRoot string, member residual.ExecMember, detected, v
 }
 
 func execDisplayName(workspaceRoot string, member residual.ExecMember, includeArgs bool) string {
-	name := strings.TrimSpace(member.Filename)
-	if name != "" {
-		filename := filepath.Clean(name)
-		name = filepath.Base(filename)
-		if qualifier := executableQualifier(workspaceRoot, filename); qualifier != "" {
-			name += " (" + qualifier + ")"
-		}
-		if includeArgs && len(member.Argv) > 1 {
-			name += " " + strings.Join(member.Argv[1:], " ")
-		}
-	} else {
-		name = strings.TrimSpace(strings.TrimPrefix(member.Summary, "exec "))
-	}
-	return name
-}
-
-func executableQualifier(workspaceRoot, filename string) string {
-	if !filepath.IsAbs(filename) {
-		if strings.ContainsRune(filename, os.PathSeparator) {
-			return filename
-		}
-		return ""
-	}
-	if rel, inside := displayWorkspacePath(workspaceRoot, filename); inside {
-		return rel
-	}
-	for _, root := range []string{"/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/lib", "/usr/lib64", "/lib", "/lib64", "/nix/store", "/snap"} {
-		if filename == root || strings.HasPrefix(filename, root+string(os.PathSeparator)) {
-			return ""
-		}
-	}
-	return filename
-}
-
-type fileEffectGroup struct {
-	Op, Path              string
-	Count                 int
-	Detection, Workspace  bool
-	AttributionIncomplete bool
-	Priority              int
+	return actionview.ExecDisplayName(workspaceRoot, member, includeArgs)
 }
 
 func renderInspectFileEffects(w io.Writer, meta runs.Meta, episode residual.ExecutionEpisode, detections []actionview.Detection, limit int, verbose bool) {
@@ -551,7 +371,6 @@ func renderInspectFileEffects(w io.Writer, meta runs.Meta, episode residual.Exec
 		return
 	}
 	_, _ = fmt.Fprintln(w, "\nWorkspace and file effects")
-	detected := detectionSeqSet(detections)
 	if verbose {
 		for _, effect := range episode.FileEffects {
 			path, _ := displayWorkspacePath(meta.CWD, effect.Path)
@@ -560,34 +379,7 @@ func renderInspectFileEffects(w io.Writer, meta runs.Meta, episode residual.Exec
 		}
 		return
 	}
-	groupsByKey := make(map[string]*fileEffectGroup)
-	for _, effect := range episode.FileEffects {
-		op := normalizeFileOp(effect.Op)
-		path, workspace := displayWorkspacePath(meta.CWD, effect.Path)
-		key := op + "\x00" + path
-		group := groupsByKey[key]
-		if group == nil {
-			group = &fileEffectGroup{Op: op, Path: path, Workspace: workspace}
-			groupsByKey[key] = group
-		}
-		group.Count++
-		group.Detection = group.Detection || detected[effect.Seq]
-		group.AttributionIncomplete = group.AttributionIncomplete || effect.Attribution != "task_instance_latest_exec_generation"
-	}
-	groups := make([]*fileEffectGroup, 0, len(groupsByKey))
-	for _, group := range groupsByKey {
-		group.Priority = fileEffectPriority(group)
-		groups = append(groups, group)
-	}
-	sort.SliceStable(groups, func(i, j int) bool {
-		if groups[i].Priority != groups[j].Priority {
-			return groups[i].Priority < groups[j].Priority
-		}
-		if groups[i].Op != groups[j].Op {
-			return groups[i].Op < groups[j].Op
-		}
-		return groups[i].Path < groups[j].Path
-	})
+	groups := actionview.GroupFileEffects(meta.CWD, episode.FileEffects, detections)
 	shown := len(groups)
 	if shown > limit {
 		shown = limit
@@ -612,68 +404,11 @@ func renderInspectFileEffects(w io.Writer, meta runs.Meta, episode residual.Exec
 }
 
 func normalizeFileOp(op string) string {
-	switch strings.ToLower(strings.TrimSpace(op)) {
-	case "create":
-		return "CREATE"
-	case "create_or_open":
-		return "CREATE/OPEN"
-	case "modify", "truncate":
-		return "MODIFY"
-	case "rename":
-		return "RENAME"
-	case "delete":
-		return "DELETE"
-	case "open", "read", "access":
-		return "READ/OPEN"
-	case "chdir":
-		return "CHDIR"
-	case "":
-		return "UNKNOWN"
-	default:
-		return strings.ToUpper(strings.TrimSpace(op))
-	}
-}
-
-func fileEffectPriority(group *fileEffectGroup) int {
-	if group.Detection {
-		return 0
-	}
-	stateChanging := group.Op == "CREATE" || group.Op == "CREATE/OPEN" || group.Op == "MODIFY" || group.Op == "RENAME" || group.Op == "DELETE"
-	if group.Workspace && stateChanging {
-		return 1
-	}
-	if group.AttributionIncomplete {
-		return 2
-	}
-	if stateChanging {
-		return 3
-	}
-	return 4
+	return actionview.NormalizeFileOp(op)
 }
 
 func displayWorkspacePath(cwd, path string) (string, bool) {
-	path = filepath.Clean(strings.TrimSpace(path))
-	if path == "." || path == "" {
-		return path, false
-	}
-	if !filepath.IsAbs(path) {
-		return path, strings.TrimSpace(cwd) != ""
-	}
-	if strings.TrimSpace(cwd) == "" {
-		return path, false
-	}
-	rel, err := filepath.Rel(filepath.Clean(cwd), path)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return path, false
-	}
-	return rel, true
-}
-
-type networkEffectGroup struct {
-	Op, Proto, Destination string
-	Count                  int
-	Bytes                  int64
-	Detection              bool
+	return actionview.DisplayWorkspacePath(cwd, path)
 }
 
 func renderInspectNetworkEffects(w io.Writer, episode residual.ExecutionEpisode, detections []actionview.Detection, limit int, verbose bool) {
@@ -681,7 +416,6 @@ func renderInspectNetworkEffects(w io.Writer, episode residual.ExecutionEpisode,
 		return
 	}
 	_, _ = fmt.Fprintln(w, "\nNetwork destinations")
-	detected := detectionSeqSet(detections)
 	if verbose {
 		for _, effect := range episode.NetworkEffects {
 			_, _ = fmt.Fprintf(w, "  %s %s %s bytes=%d seq=%d pid=%d via_exec=%d attribution=%s\n",
@@ -690,29 +424,7 @@ func renderInspectNetworkEffects(w io.Writer, episode residual.ExecutionEpisode,
 		}
 		return
 	}
-	byKey := make(map[string]*networkEffectGroup)
-	for _, effect := range episode.NetworkEffects {
-		dst := networkDestination(effect)
-		key := effect.Op + "\x00" + effect.Proto + "\x00" + dst
-		group := byKey[key]
-		if group == nil {
-			group = &networkEffectGroup{Op: emptyAs(effect.Op, "unknown"), Proto: emptyAs(effect.Proto, "unknown"), Destination: dst}
-			byKey[key] = group
-		}
-		group.Count++
-		group.Bytes += effect.Bytes
-		group.Detection = group.Detection || detected[effect.Seq]
-	}
-	groups := make([]*networkEffectGroup, 0, len(byKey))
-	for _, group := range byKey {
-		groups = append(groups, group)
-	}
-	sort.Slice(groups, func(i, j int) bool {
-		if groups[i].Detection != groups[j].Detection {
-			return groups[i].Detection
-		}
-		return groups[i].Destination < groups[j].Destination
-	})
+	groups := actionview.GroupNetworkEffects(episode.NetworkEffects, detections)
 	shown := len(groups)
 	if shown > limit {
 		shown = limit
@@ -733,18 +445,7 @@ func renderInspectNetworkEffects(w io.Writer, episode residual.ExecutionEpisode,
 }
 
 func networkDestination(effect residual.NetworkEffect) string {
-	if effect.DstPort > 0 {
-		return net.JoinHostPort(effect.DstIP, strconv.Itoa(int(effect.DstPort)))
-	}
-	return emptyAs(effect.DstIP, "unknown")
-}
-
-func detectionSeqSet(detections []actionview.Detection) map[int64]bool {
-	out := make(map[int64]bool, len(detections))
-	for _, detection := range detections {
-		out[detection.RelatedEventSeq] = true
-	}
-	return out
+	return actionview.NetworkDestination(effect)
 }
 
 func inspectUsage(w io.Writer, fs *flag.FlagSet) {
