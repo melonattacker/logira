@@ -237,7 +237,7 @@ func decodeNetEvent(sample []byte) (rawNetEvent, error) {
 	raw.TID = binary.BigEndian.Uint32(sample[52:56])
 	raw.TGID = binary.BigEndian.Uint32(sample[56:60])
 	raw.UID = binary.BigEndian.Uint32(sample[60:64])
-	raw.Bytes = int64(binary.BigEndian.Uint64(sample[64:72]))
+	raw.Bytes = int64(binary.BigEndian.Uint64(sample[64:72])) //nolint:gosec // Wire ABI encodes signed bytes as two's-complement uint64; preserve the sign bit.
 	return raw, nil
 }
 

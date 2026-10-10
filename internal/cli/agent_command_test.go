@@ -199,7 +199,7 @@ func TestCanceledAgentCommandDoesNotHangWaitingForStdout(t *testing.T) {
 }
 
 func codexStdoutHelperCommand(ctx context.Context, count int, mode string, exitCode int) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCodexStdoutHelperProcess$")
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCodexStdoutHelperProcess$") //nolint:gosec // Re-execute the current test binary with a fixed test selector.
 	cmd.Env = append(os.Environ(),
 		codexStdoutHelperEnv+"="+mode,
 		"LOGIRA_TEST_CODEX_STDOUT_COUNT="+strconv.Itoa(count),

@@ -214,9 +214,10 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 			var d model.ProcessDetail
 			_ = json.Unmarshal(ev.DataJSON, &d)
 			peer := "-"
-			if d.Kind == "fork" {
+			switch d.Kind {
+			case "fork":
 				peer = fmt.Sprintf("%d -> %d", d.ParentTID, d.ChildTID)
-			} else if d.Kind == "exec_rekey" {
+			case "exec_rekey":
 				peer = fmt.Sprintf("%d -> %d", d.OldPID, d.TID)
 			}
 			rows = append(rows, []string{

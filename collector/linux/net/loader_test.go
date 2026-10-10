@@ -4,6 +4,7 @@ package nettrace
 
 import (
 	"encoding/binary"
+	"math"
 	"testing"
 )
 
@@ -59,14 +60,29 @@ func TestDecodeIPv6WireFixture(t *testing.T) {
 }
 
 func TestDecodeSignedByteCountTwoComplement(t *testing.T) {
-	sample := netWireFixture(2, []byte{127, 0, 0, 1}, 443)
-	binary.BigEndian.PutUint64(sample[64:72], ^uint64(6)) // -7 in two's complement
-	raw, err := decodeNetEvent(sample)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if raw.Bytes != -7 {
-		t.Fatalf("bytes=%d", raw.Bytes)
+	for _, tc := range []struct {
+		name string
+		bits uint64
+		want int64
+	}{
+		{name: "zero", bits: 0x0000000000000000, want: 0},
+		{name: "positive", bits: 0x000000000000001d, want: 29},
+		{name: "negative one", bits: 0xffffffffffffffff, want: -1},
+		{name: "negative seven", bits: 0xfffffffffffffff9, want: -7},
+		{name: "maximum", bits: 0x7fffffffffffffff, want: math.MaxInt64},
+		{name: "minimum", bits: 0x8000000000000000, want: math.MinInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sample := netWireFixture(2, []byte{127, 0, 0, 1}, 443)
+			binary.BigEndian.PutUint64(sample[64:72], tc.bits)
+			raw, err := decodeNetEvent(sample)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if raw.Bytes != tc.want {
+				t.Fatalf("bytes=%d, want %d for wire bits %#016x", raw.Bytes, tc.want, tc.bits)
+			}
+		})
 	}
 }
 

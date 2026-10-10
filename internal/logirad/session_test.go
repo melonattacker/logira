@@ -58,12 +58,16 @@ func TestNormalizeFileDetail_DoesNotFilterByWatchPaths(t *testing.T) {
 
 func TestNormalizeFileDetailResolvesRelativeOpenatAgainstDirFD(t *testing.T) {
 	base := t.TempDir()
-	dir, err := os.Open(base)
+	dir, err := os.Open(base) //nolint:gosec // Path returned by t.TempDir(), not user input.
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dir.Close()
-	dirfd := int(dir.Fd())
+	defer func() {
+		if err := dir.Close(); err != nil {
+			t.Errorf("close directory: %v", err)
+		}
+	}()
+	dirfd := int(dir.Fd()) //nolint:gosec // Successfully opened Linux file descriptors fit in int.
 	s := &session{meta: runs.Meta{CWD: "/wrong/cwd"}}
 	b, _ := json.Marshal(model.FileDetail{Op: "open", Path: "child.txt", DirFD: &dirfd})
 
@@ -98,8 +102,12 @@ func TestNormalizeFileDetailDoesNotResolveThroughReusableReturnedFD(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	fd, atFDCWD := int(f.Fd()), -100
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close file: %v", err)
+		}
+	}()
+	fd, atFDCWD := int(f.Fd()), -100 //nolint:gosec // Successfully opened Linux file descriptors fit in int.
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -212,12 +220,16 @@ func TestWriteUsesSuccessfulOpenFDProvenance(t *testing.T) {
 func TestRenameResolvesBothDirFDPaths(t *testing.T) {
 	s := &session{meta: runs.Meta{Version: 5}}
 	base := t.TempDir()
-	dir, err := os.Open(base)
+	dir, err := os.Open(base) //nolint:gosec // Path returned by t.TempDir(), not user input.
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dir.Close()
-	dirfd := int(dir.Fd())
+	defer func() {
+		if err := dir.Close(); err != nil {
+			t.Errorf("close directory: %v", err)
+		}
+	}()
+	dirfd := int(dir.Fd()) //nolint:gosec // Successfully opened Linux file descriptors fit in int.
 	raw, _ := json.Marshal(model.FileDetail{Op: "rename", Syscall: "renameat", Correlation: "complete", Path: "old", Path2: "new", DirFD: &dirfd, DirFD2: &dirfd, TGID: os.Getpid(), TID: os.Getpid()})
 	d, ok := s.normalizeFileDetail(collector.Event{PID: os.Getpid(), Detail: raw})
 	if !ok || d.Path != filepath.Join(base, "old") || d.Path2 != filepath.Join(base, "new") {

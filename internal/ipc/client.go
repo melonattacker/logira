@@ -132,7 +132,9 @@ func appendOneShot(ctx context.Context, req any) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.Close() // Preserve the request result if connection cleanup fails.
+	}()
 	var resp OKResponse
 	if err := c.roundTrip(ctx, req, &resp); err != nil {
 		return err

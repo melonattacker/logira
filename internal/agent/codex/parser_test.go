@@ -12,7 +12,11 @@ func TestParseCapturedCodex0147(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close fixture: %v", err)
+		}
+	}()
 	var kinds []string
 	s := bufio.NewScanner(f)
 	for s.Scan() {
