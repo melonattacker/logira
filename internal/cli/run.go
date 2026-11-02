@@ -55,7 +55,7 @@ func RunCommand(ctx context.Context, args []string) error {
 	fs.StringVar(&tool, "tool", "", "tool name for run id suffix (default: basename of the command)")
 	fs.StringVar(&rulesPath, "rules", "", "path to custom detection rules YAML (appended to built-in rules)")
 	fs.StringVar(&summaryModeS, "summary", string(runSummaryModeAuto), "end-of-run summary: auto|off|detections")
-	fs.Var(&watch, "watch", "deprecated compatibility flag; file event retention is rule-driven")
+	fs.Var(&watch, "watch", "deprecated compatibility flag; file changes are retained; routine opens are rule-driven")
 	fs.BoolVar(&enableExec, "exec", true, "enable exec tracing")
 	fs.BoolVar(&enableFile, "file", true, "enable file tracing")
 	fs.BoolVar(&enableNet, "net", true, "enable network tracing")
@@ -85,7 +85,7 @@ func RunCommand(ctx context.Context, args []string) error {
 		fmt.Fprintln(os.Stderr, "warning: --log is deprecated; events are always stored under ~/.logira/runs/<run-id>/")
 	}
 	if len(watch) > 0 {
-		fmt.Fprintln(os.Stderr, "warning: --watch is deprecated; file event retention is now driven by detection rules")
+		fmt.Fprintln(os.Stderr, "warning: --watch is deprecated; file changes are retained; routine opens are driven by detection rules")
 	}
 
 	home, err := runs.EnsureHome()
@@ -227,11 +227,11 @@ func stopRunWithRetry(client *ipc.Client, sessionID string, exitCode int) error 
 		return err
 	}
 
-	if err := tryStop(client); err == nil {
+	firstErr := tryStop(client)
+	if firstErr == nil {
 		return nil
 	}
-
-	var lastErr error
+	lastErr := firstErr
 	for i := 0; i < 4; i++ {
 		time.Sleep(time.Duration(i+1) * 200 * time.Millisecond)
 
@@ -240,8 +240,15 @@ func stopRunWithRetry(client *ipc.Client, sessionID string, exitCode int) error 
 			lastErr = err
 			continue
 		}
-		err = tryStop(c)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		err = c.StopRun(stopCtx, sessionID, exitCode)
+		cancel()
 		_ = c.Close()
+		// A prior finalization error must not disappear when the session has
+		// already been removed by the daemon.
+		if isUnknownSessionErr(err) {
+			return lastErr
+		}
 		if err == nil {
 			return nil
 		}
@@ -272,7 +279,7 @@ func runUsage(w io.Writer, fs *flag.FlagSet) {
 	_, _ = fmt.Fprintln(w, "  Runs are stored under ~/.logira/runs/<run-id>/ (override: LOGIRA_HOME).")
 	_, _ = fmt.Fprintln(w, "  End-of-run summaries are written to stderr; use --summary off to suppress them.")
 	_, _ = fmt.Fprintln(w, "  --rules appends a user YAML ruleset to the built-in detection rules for this run.")
-	_, _ = fmt.Fprintln(w, "  File event retention is rule-driven; --watch is deprecated compatibility only.")
+	_, _ = fmt.Fprintln(w, "  File changes and rule-relevant opens are retained; --watch is deprecated compatibility only.")
 	_, _ = fmt.Fprintln(w)
 
 	_, _ = fmt.Fprintln(w, "Examples:")

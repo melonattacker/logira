@@ -6,6 +6,7 @@ type EventType string
 
 const (
 	TypeExec      EventType = "exec"
+	TypeProcess   EventType = "process"
 	TypeFile      EventType = "file"
 	TypeNet       EventType = "net"
 	TypeDetection EventType = "detection"

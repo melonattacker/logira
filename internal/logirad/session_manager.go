@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,15 +37,27 @@ const (
 
 type SessionManager struct {
 	collector collector.Collector
+	caps      CollectorCapabilities
 
 	mu          sync.Mutex
 	bySessionID map[string]*session
 	byCgroupID  map[uint64]*session
 }
 
-func NewSessionManager(col collector.Collector) *SessionManager {
+type CollectorCapabilities struct {
+	Exec bool
+	File bool
+	Net  bool
+}
+
+func NewSessionManager(col collector.Collector, configured ...CollectorCapabilities) *SessionManager {
+	caps := CollectorCapabilities{Exec: true, File: true, Net: true}
+	if len(configured) > 0 {
+		caps = configured[0]
+	}
 	return &SessionManager{
 		collector:   col,
+		caps:        caps,
 		bySessionID: make(map[string]*session),
 		byCgroupID:  make(map[uint64]*session),
 	}
@@ -117,6 +130,9 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 
 	now := time.Now().UTC()
 	startTS := now.UnixNano()
+	effectiveExec := req.EnableExec && m.caps.Exec
+	effectiveFile := req.EnableFile && m.caps.File
+	effectiveNet := req.EnableNet && m.caps.Net
 	meta := runs.Meta{
 		RunID:       req.RunID,
 		StartTS:     startTS,
@@ -125,8 +141,11 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		CommandArgv: append([]string{}, req.CmdArgv...),
 		CWD:         cwd,
 		WatchPaths:  append([]string{}, req.WatchPaths...),
-		Version:     3,
+		Version:     5,
 	}
+	meta.Coverage.Process = initialKernelCoverage(effectiveExec)
+	meta.Coverage.File = initialKernelCoverage(effectiveFile)
+	meta.Coverage.Network = initialKernelCoverage(effectiveNet)
 	if len(req.CustomRulesYAML) > 0 {
 		sum := sha256.Sum256(req.CustomRulesYAML)
 		meta.CustomRules = true
@@ -173,11 +192,17 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 		return out, err
 	}
 
-	s := newSession(sessionID, cred.UID, cred.GID, homeDir, req.EnableExec, req.EnableFile, req.EnableNet, base, runDir, meta, store, detector, cg, cgID)
+	s := newSession(sessionID, cred.UID, cred.GID, homeDir, effectiveExec, effectiveFile, effectiveNet, base, runDir, meta, store, detector, cg, cgID)
+	if tracker, ok := m.collector.(collector.LossTracker); ok {
+		tracker.RegisterLossTarget(cgID)
+	}
 	m.mu.Lock()
 	if _, ok := m.bySessionID[sessionID]; ok {
 		m.mu.Unlock()
-		s.closeWithEnd(storage.NowUnixNanos(), metaJSONBytes)
+		if tracker, ok := m.collector.(collector.LossTracker); ok {
+			_ = tracker.SnapshotAndUnregisterLossTarget(cgID)
+		}
+		_ = s.closeWithEnd(storage.NowUnixNanos(), collector.DropCounts{})
 		return out, fmt.Errorf("session id collision")
 	}
 	m.bySessionID[sessionID] = s
@@ -196,6 +221,13 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	return out, nil
 }
 
+func initialKernelCoverage(enabled bool) runs.KernelCoverage {
+	if !enabled {
+		return runs.KernelCoverage{Availability: "unavailable", Capture: "not_applicable"}
+	}
+	return runs.KernelCoverage{Availability: "available", Capture: "unknown"}
+}
+
 func (m *SessionManager) StopRun(ctx context.Context, cred ipc.PeerCred, sessionID string, exitCode int) error {
 	_ = ctx
 	if strings.TrimSpace(sessionID) == "" {
@@ -207,9 +239,9 @@ func (m *SessionManager) StopRun(ctx context.Context, cred ipc.PeerCred, session
 		return err
 	}
 
-	m.finalizeSession(s, storage.NowUnixNanos())
+	err = m.finalizeSession(s, storage.NowUnixNanos())
 	_ = exitCode
-	return nil
+	return err
 }
 
 func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUID bool) (*session, error) {
@@ -229,16 +261,18 @@ func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUI
 	return s, nil
 }
 
-func (m *SessionManager) finalizeSession(s *session, endTS int64) {
-	meta := s.meta
-	meta.EndTS = endTS
-	meta.SuspiciousCount = s.store.SuspiciousCount()
-	metaJSONBytes, _ := json.Marshal(meta)
-	_ = runs.WriteMeta(s.runDir, meta)
-
-	s.closeWithEnd(endTS, metaJSONBytes)
+func (m *SessionManager) finalizeSession(s *session, endTS int64) error {
+	var forward collector.DropCounts
+	if finalizer, ok := m.collector.(collector.FileCorrelationFinalizer); ok {
+		_ = finalizer.FinalizeFileCorrelation(s.cgroupID)
+	}
+	if tracker, ok := m.collector.(collector.LossTracker); ok {
+		forward = tracker.SnapshotAndUnregisterLossTarget(s.cgroupID)
+	}
+	err := s.closeWithEnd(endTS, forward)
 	// Best-effort cleanup.
 	_ = s.cg.Remove()
+	return err
 }
 
 func (m *SessionManager) hasSession(sessionID string) bool {
@@ -287,7 +321,7 @@ func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath s
 			}
 			s, err := m.takeSessionForStop(sessionID, 0, false)
 			if err == nil {
-				m.finalizeSession(s, storage.NowUnixNanos())
+				m.logFinalization(s)
 			}
 			return
 		}
@@ -301,7 +335,7 @@ func (m *SessionManager) autoStopWhenCgroupDrains(sessionID string, cgroupPath s
 		}
 		s, err := m.takeSessionForStop(sessionID, 0, false)
 		if err == nil {
-			m.finalizeSession(s, storage.NowUnixNanos())
+			m.logFinalization(s)
 		}
 		return
 	}
@@ -344,7 +378,7 @@ func (m *SessionManager) RouteEvent(ev collector.Event) {
 
 func extractCgroupID(typ string, detail json.RawMessage) uint64 {
 	switch storage.EventType(strings.TrimSpace(typ)) {
-	case storage.TypeExec, storage.TypeNet, storage.TypeFile:
+	case storage.TypeExec, storage.TypeProcess, storage.TypeNet, storage.TypeFile:
 	default:
 		return 0
 	}
@@ -443,4 +477,10 @@ func procUID(pid int) (int, error) {
 		}
 	}
 	return 0, fmt.Errorf("uid not found")
+}
+
+func (m *SessionManager) logFinalization(s *session) {
+	if err := m.finalizeSession(s, storage.NowUnixNanos()); err != nil {
+		log.Printf("finalize run %s: %v", s.meta.RunID, err)
+	}
 }

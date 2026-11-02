@@ -14,9 +14,8 @@ Custom rules use the same YAML format as the built-in rules in `internal/detect/
 - `--rules` appends your custom rules to the built-in set for that run.
 - Rule IDs must be unique across the merged set (built-in + custom).
 - Invalid YAML / invalid rule schema causes `logira run` to fail before the run starts.
-- File event retention is rule-driven:
-  - file events are only recorded if they match at least one active file rule
-  - adding file rules may increase stored file-event volume
+- State-changing file evidence is retained for every ordinary run.
+- Routine opens are retained when relevant to active file rules; adding rules may increase event volume.
 
 ## Top-Level YAML Format
 
@@ -180,3 +179,12 @@ Examples of invalid rules that `logira run --rules` will reject:
 - Quick trial rules: [`examples/rules/quickstart.yaml`](../examples/rules/quickstart.yaml)
 - Trial commands and notes: [`examples/rules/README.md`](../examples/rules/README.md)
 
+
+## File lifecycle evidence
+
+Ordinary runs retain state-changing file evidence independently of file rules;
+rules continue to control routine-open retention and detections. File op filters
+also accept `rename` and `create_or_open`. A `create` filter matches confirmed
+creation, not ambiguous `O_CREAT` opens. Truncation keeps `op=modify` for existing
+rules; inspect `syscall` and `flags` for its specific mechanism. Rename path
+matching currently uses the source path; the destination remains in `path2`.

@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	EventTypeExec = "exec"
-	EventTypeFile = "file"
-	EventTypeNet  = "net"
+	EventTypeExec    = "exec"
+	EventTypeProcess = "process"
+	EventTypeFile    = "file"
+	EventTypeNet     = "net"
 )
 
 var ErrLinuxOnly = errors.New("logira collector is only supported on linux")
@@ -45,4 +46,24 @@ type TargetSetter interface {
 
 type ChildWaiter interface {
 	WaitForIdle(ctx context.Context) error
+}
+
+type DropCounts struct {
+	Exec                    uint64
+	File                    uint64
+	Net                     uint64
+	FileCorrelationFailures uint64
+}
+
+// LossTracker reports userspace forwarding drops for active audited cgroups.
+// It does not claim visibility into losses below the collector boundary.
+type LossTracker interface {
+	RegisterLossTarget(cgroupID uint64)
+	SnapshotAndUnregisterLossTarget(cgroupID uint64) DropCounts
+}
+
+// FileCorrelationFinalizer clears pending file syscall enters for a drained
+// cgroup and reports the number that had no observed exit.
+type FileCorrelationFinalizer interface {
+	FinalizeFileCorrelation(cgroupID uint64) uint64
 }

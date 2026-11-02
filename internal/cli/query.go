@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/melonattacker/logira/internal/cliui"
+	"github.com/melonattacker/logira/internal/model"
 	"github.com/melonattacker/logira/internal/runs"
 	"github.com/melonattacker/logira/internal/storage"
 )
@@ -45,7 +46,7 @@ func QueryCommand(ctx context.Context, args []string) error {
 	}
 
 	fs.StringVar(&runSel, "run", runSel, "run id or 'last'")
-	fs.StringVar(&typ, "type", "all", "exec|file|net|detection|all")
+	fs.StringVar(&typ, "type", "all", "process|exec|file|net|detection|all")
 	fs.StringVar(&since, "since", "", "duration like 1h, 24h, -10s")
 	fs.StringVar(&contains, "contains", "", "substring match in summary/data")
 	fs.StringVar(&path, "path", "", "path substring (file events)")
@@ -180,6 +181,40 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 	}
 
 	switch eventType {
+	case storage.TypeProcess:
+		rows := make([][]string, 0, len(evs))
+		for _, ev := range evs {
+			var d model.ProcessDetail
+			_ = json.Unmarshal(ev.DataJSON, &d)
+			peer := "-"
+			switch d.Kind {
+			case "fork":
+				peer = fmt.Sprintf("%d -> %d", d.ParentTID, d.ChildTID)
+			case "exec_rekey":
+				peer = fmt.Sprintf("%d -> %d", d.OldPID, d.TID)
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("%d", ev.Seq),
+				cliui.FormatTimestamp(ev.TS, runStartTS, tsMode),
+				cliui.Truncate(d.Kind, 14),
+				fmt.Sprintf("%d", d.TID),
+				fmt.Sprintf("%d", d.TGID),
+				peer,
+				cliui.Truncate(d.CloneKind, 14),
+				fmt.Sprintf("%d", d.TaskStartKernelNS),
+			})
+		}
+		cliui.RenderTable(os.Stdout, []cliui.Column{
+			{Name: "seq", MaxWidth: 6, AlignRight: true},
+			{Name: "at", MaxWidth: 18},
+			{Name: "kind", MaxWidth: 14},
+			{Name: "tid", MaxWidth: 7, AlignRight: true},
+			{Name: "tgid", MaxWidth: 7, AlignRight: true},
+			{Name: "edge", MaxWidth: 18},
+			{Name: "clone", MaxWidth: 14},
+			{Name: "task_start_kernel_ns", MaxWidth: 20, AlignRight: true},
+		}, rows)
+		return nil
 	case storage.TypeExec:
 		rows := make([][]string, 0, len(evs))
 		maxArg := 56
@@ -239,7 +274,7 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 				fmt.Sprintf("%d", ev.Seq),
 				cliui.FormatTimestamp(ev.TS, runStartTS, tsMode),
 				fmt.Sprintf("%d", ev.PID),
-				cliui.Truncate(d.Op, 10),
+				cliui.Truncate(d.Op, 14),
 				cliui.Truncate(d.Path, 48),
 				before,
 				after,
@@ -250,7 +285,7 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 			{Name: "seq", MaxWidth: 6, AlignRight: true},
 			{Name: "at", MaxWidth: 18},
 			{Name: "pid", MaxWidth: 6, AlignRight: true},
-			{Name: "op", MaxWidth: 10},
+			{Name: "op", MaxWidth: 14},
 			{Name: "path", MaxWidth: 48},
 			{Name: "size_before", MaxWidth: 11, AlignRight: true},
 			{Name: "size_after", MaxWidth: 10, AlignRight: true},
@@ -263,7 +298,7 @@ func printQueryTable(evs []storage.Event, eventType storage.EventType, runStartT
 			d, _ := parseNetDetail(ev.DataJSON)
 			dst := strings.TrimSpace(d.DstIP)
 			if d.DstPort > 0 {
-				dst = fmt.Sprintf("%s:%d", d.DstIP, d.DstPort)
+				dst = net.JoinHostPort(d.DstIP, strconv.Itoa(int(d.DstPort)))
 			}
 			rows = append(rows, []string{
 				fmt.Sprintf("%d", ev.Seq),
@@ -340,6 +375,8 @@ func parseEventType(v string) (storage.EventType, error) {
 		return "", nil
 	case "exec":
 		return storage.TypeExec, nil
+	case "process":
+		return storage.TypeProcess, nil
 	case "file":
 		return storage.TypeFile, nil
 	case "net":
@@ -347,7 +384,7 @@ func parseEventType(v string) (storage.EventType, error) {
 	case "detection":
 		return storage.TypeDetection, nil
 	default:
-		return "", fmt.Errorf("invalid --type %q (expected exec|file|net|detection|all)", v)
+		return "", fmt.Errorf("invalid --type %q (expected process|exec|file|net|detection|all)", v)
 	}
 }
 

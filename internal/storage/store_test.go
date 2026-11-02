@@ -79,3 +79,24 @@ func TestStore_SQLiteAndJSONL(t *testing.T) {
 		t.Fatalf("expected 1 detection, got %d", len(dets))
 	}
 }
+
+func TestFlushExposesBufferedPersistenceFailure(t *testing.T) {
+	s, err := Open(OpenParams{RunID: "flush", RunDir: t.TempDir(), StartTS: 1, MetaJSON: `{}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a file becoming unwritable after append was accepted into the
+	// buffer, before the final coverage snapshot.
+	if _, err := s.AppendObserved(2, TypeExec, 1, 0, 0, "exec", json.RawMessage(`{}`), EventRow{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.jsonl.f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Flush(); err == nil {
+		t.Fatal("buffered persistence failure was hidden")
+	}
+	if err := s.Close(3, `{}`); err == nil {
+		t.Fatal("close failure was hidden")
+	}
+}

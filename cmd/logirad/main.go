@@ -43,7 +43,7 @@ func realMain() int {
 		EnableExec: enableExec,
 		EnableFile: enableFile,
 		EnableNet:  enableNet,
-		// file event retention is rule-driven in session userspace handling.
+		// Sessions retain file changes and rule-relevant routine opens.
 	}
 
 	col := collector.New(cfg)
@@ -63,7 +63,7 @@ func realMain() int {
 		}
 	}()
 
-	mgr := logirad.NewSessionManager(col)
+	mgr := logirad.NewSessionManager(col, logirad.CollectorCapabilities{Exec: enableExec, File: enableFile, Net: enableNet})
 	go func() {
 		for ev := range events {
 			mgr.RouteEvent(ev)

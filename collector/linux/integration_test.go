@@ -42,6 +42,7 @@ func TestCollectorIntegrationSmoke(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
+	//nolint:gosec // Fixed smoke fixture writes only to a t.TempDir path.
 	cmd := exec.Command("bash", "-lc", "echo hi > \""+outFile+"\"")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
