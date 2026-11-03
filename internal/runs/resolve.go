@@ -12,6 +12,29 @@ func RunDir(home, runID string) string {
 	return filepath.Join(home, "runs", runID)
 }
 
+// ResolveExistingRun locates saved input without EnsureHome's mkdir/SQLite
+// probes. Only offline Episode analysis uses this helper; capture is unchanged.
+func ResolveExistingRun(sel string) (string, string, error) {
+	home, err := HomeDir()
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(os.Getenv("LOGIRA_HOME")) != "" || strings.TrimSpace(os.Getenv("logira_HOME")) != "" {
+		return ResolveRunID(home, sel)
+	}
+	var firstErr error
+	for _, candidate := range homeCandidates(home) {
+		id, dir, err := ResolveRunID(candidate, sel)
+		if err == nil {
+			return id, dir, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return "", "", firstErr
+}
+
 // ResolveRunID resolves "last" or an explicit run id into a run directory.
 func ResolveRunID(home, sel string) (runID string, runDir string, err error) {
 	sel = strings.TrimSpace(sel)
