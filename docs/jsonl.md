@@ -1,5 +1,10 @@
 # logira JSONL (v2)
 
+`logira episode` reconstructs an execution lineage from these retained records
+without changing the JSONL schema or writing derived audit events. Its separate
+[Episode JSON schema and attribution rules](episodes.md) preserve source
+sequence numbers and the original event payloads.
+
 logira stores one JSON object per line in `events.jsonl` under each run directory:
 
 `$LOGIRA_HOME/runs/<run-id>/events.jsonl`

@@ -51,6 +51,9 @@ func realMain() int {
 	case "explain":
 		args = normalizeSubcommandHelpArgs(args)
 		err = cli.ExplainCommand(ctx, args)
+	case "episode":
+		args = normalizeSubcommandHelpArgs(args)
+		err = cli.EpisodeCommand(ctx, args)
 	case "_exec_in_cgroup":
 		// Internal helper used by `logira run` to join a delegated cgroup before exec.
 		err = cli.ExecInCgroupCommand(ctx, args)
@@ -119,6 +122,9 @@ func runHelp(ctx context.Context, prog string, args []string) int {
 	case "explain":
 		_ = cli.ExplainCommand(ctx, []string{"-h"})
 		return 0
+	case "episode":
+		_ = cli.EpisodeCommand(ctx, []string{"-h"})
+		return 0
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "unknown command %q\n\n", sub)
 		printRootHelp(os.Stderr, prog)
@@ -139,6 +145,7 @@ func printRootHelp(w io.Writer, prog string) {
 	_, _ = fmt.Fprintln(w, "  view       View a run summary (default: last).")
 	_, _ = fmt.Fprintln(w, "  query      Query events in a run (default: last).")
 	_, _ = fmt.Fprintln(w, "  explain    Explain detections for a run (default: last).")
+	_, _ = fmt.Fprintln(w, "  episode    Inspect an execution lineage selected with --exec-seq.")
 	_, _ = fmt.Fprintln(w)
 
 	_, _ = fmt.Fprintln(w, "Examples:")

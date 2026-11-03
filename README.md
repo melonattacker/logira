@@ -173,8 +173,31 @@ Query events:
 - `logira view [last|<run-id>]`: run dashboard (use `--raw` for legacy text)
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
+- `logira episode [last|<run-id>] --exec-seq <seq> [--json]`: reconstruct one observed execution lineage
 
-Rules:
+### Execution Episodes
+
+A Run contains the capture session's retained observations. A Process Graph
+reconstructs observed task identities and relationships within that Run. An
+Execution Episode selects one exec and follows its observed descendants,
+including fork-only tasks and later executable replacements.
+
+```bash
+./logira query last --type exec
+./logira episode last --exec-seq 12
+./logira episode last --exec-seq 12 --json
+```
+
+Episodes report attributable file/network evidence and explicitly separate
+uncertain, unrelated, and unattributable observations. Ancestors and siblings
+do not become members. Missing ancestry or empty activity does not prove
+inactivity. This is offline, general-purpose OS analysis, independent of agent
+runtimes and without security or intent judgments.
+
+See [Episode identity, attribution, counting, and JSON semantics](docs/episodes.md)
+for the stable output format, legacy limitations, and a shell/descendant example.
+
+### Rules
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)
 - optional per-run custom rules can be appended with `logira run --rules <yaml-file>`
 - sample custom rules and trial commands: [`examples/rules/README.md`](examples/rules/README.md)

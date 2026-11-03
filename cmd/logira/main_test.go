@@ -1,13 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/melonattacker/logira/internal/cli"
 )
+
+func TestRootHelpIncludesEpisode(t *testing.T) {
+	var out bytes.Buffer
+	printRootHelp(&out, "logira")
+	if !strings.Contains(out.String(), "episode") || !strings.Contains(out.String(), "--exec-seq") {
+		t.Fatal("missing episode help")
+	}
+}
 
 func TestCommandExitCode(t *testing.T) {
 	if got, ok := commandExitCode(flag.ErrHelp); !ok || got != 0 {

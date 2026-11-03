@@ -34,6 +34,21 @@ Unit tests:
 go test ./...
 ```
 
+Process Graph, Episode, storage snapshot, and CLI scenario tests require no
+root privileges or active collectors. Focused analysis tests:
+
+```bash
+go test ./internal/analysis/... ./internal/storage
+go test ./internal/cli -run Episode
+go test ./internal/analysis/episode -run '^$' -bench DeepLineage -benchmem
+```
+
+Before submitting changes, format changed Go files and run `go test ./...`,
+`go test -race ./...`, `make build`, `go vet ./...`, and
+`golangci-lint run --timeout=5m`. Offline smoke tests can select an existing
+saved exec with `logira episode <run-id> --exec-seq <seq> --json`; this does not
+validate privileged runtime capture.
+
 Integration tests (Linux + root):
 
 ```bash
