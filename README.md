@@ -155,6 +155,8 @@ View and explain the last run:
 ./logira explain last
 ./logira explain last --show-related
 ./logira explain last --drill 35
+./logira report last
+./logira report last --exec-seq 12
 ```
 
 Query events:
@@ -174,6 +176,7 @@ Query events:
 - `logira query [last|<run-id>] [filters...]`: search events with type-specific table output
 - `logira explain [last|<run-id>]`: grouped detections by default (`--show-related`, `--drill`)
 - `logira episode [last|<run-id>] --exec-seq <seq> [--json]`: reconstruct one observed execution lineage
+- `logira report [last|<run-id>] [--exec-seq <seq>]`: generate a standalone offline HTML audit report
 
 ### Execution Episodes
 
@@ -196,6 +199,29 @@ runtimes and without security or intent judgments.
 
 See [Episode identity, attribution, counting, and JSON semantics](docs/episodes.md)
 for the stable output format, legacy limitations, and a shell/descendant example.
+
+### Standalone HTML Reports
+
+Generate a Run Overview without selecting an execution:
+
+```bash
+./logira report last
+```
+
+Select an observed exec sequence to add its Execution Episode:
+
+```bash
+./logira query last --type exec
+./logira report last --exec-seq 12 --output ./audit.html
+```
+
+Reports are single offline HTML files with embedded CSS and no external runtime
+dependencies. They preserve Episode attribution and uncertainty boundaries,
+show capture limitations, and include CLI handoffs to retained source events.
+They may contain sensitive commands, paths, and network destinations.
+
+See [Standalone HTML audit reports](docs/reports.md) for report modes, evidence
+semantics, display limits, privacy guidance, and output-file behavior.
 
 ### Rules
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)
@@ -224,6 +250,7 @@ Each run is stored at:
 - JSONL schema: [`docs/jsonl.md`](docs/jsonl.md)
 - SQLite schema: [`docs/sqlite.md`](docs/sqlite.md)
 - Custom rule syntax: [`docs/rules.md`](docs/rules.md)
+- Standalone HTML reports: [`docs/reports.md`](docs/reports.md)
 - Development notes (BPF generation, tests): [`docs/development.md`](docs/development.md)
 
 ## Notes

@@ -11,11 +11,14 @@ import (
 	"github.com/melonattacker/logira/internal/cli"
 )
 
-func TestRootHelpIncludesEpisode(t *testing.T) {
+func TestRootHelpIncludesEpisodeAndReport(t *testing.T) {
 	var out bytes.Buffer
 	printRootHelp(&out, "logira")
 	if !strings.Contains(out.String(), "episode") || !strings.Contains(out.String(), "--exec-seq") {
 		t.Fatal("missing episode help")
+	}
+	if !strings.Contains(out.String(), "report") || !strings.Contains(out.String(), "standalone offline HTML") {
+		t.Fatal("missing report help")
 	}
 }
 
