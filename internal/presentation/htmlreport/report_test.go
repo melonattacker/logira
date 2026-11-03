@@ -69,6 +69,26 @@ func TestRunOverviewDoesNotSelectEpisode(t *testing.T) {
 	}
 }
 
+func TestCoverageStatesRemainReportedAndUnverified(t *testing.T) {
+	complete := coverageItem("Process", runs.KernelCoverage{Availability: "available", Capture: "complete"})
+	if complete.Availability != "available" || complete.Capture != "complete" {
+		t.Fatalf("reported coverage values changed: %+v", complete)
+	}
+	if complete.Class != "reported" || !strings.Contains(complete.Interpretation, "not independently verified") {
+		t.Fatalf("complete capture was presented as verified: %+v", complete)
+	}
+
+	unavailable := coverageItem("File", runs.KernelCoverage{Availability: "unavailable", Capture: "not_applicable"})
+	if unavailable.Class != "warning" || !strings.Contains(unavailable.Interpretation, "not reported available") {
+		t.Fatalf("unavailable collection was not called out: %+v", unavailable)
+	}
+
+	lossy := coverageItem("Network", runs.KernelCoverage{Availability: "available", Capture: "complete", KnownLoss: runs.KnownLoss{CollectorForwardDropped: 3}})
+	if lossy.Class != "warning" || lossy.KnownLoss != 3 || !strings.Contains(lossy.LossDetail, "collector_forward_dropped=3") || !strings.Contains(lossy.Interpretation, "known collection or persistence loss") || !strings.Contains(lossy.Interpretation, "not independently verified") {
+		t.Fatalf("known loss was not called out: %+v", lossy)
+	}
+}
+
 func TestEpisodeKeepsTaskAndEvidenceSemantics(t *testing.T) {
 	report, err := Build(richReportInput(t, "normal", true))
 	if err != nil {
@@ -179,7 +199,7 @@ func TestStandaloneHTMLIsEscapedDeterministicAndOffline(t *testing.T) {
 	if strings.Contains(html, attack) || strings.Contains(strings.ToLower(html), "<script") || strings.Contains(strings.ToLower(html), "<img") {
 		t.Fatal("hostile markup was emitted as executable HTML")
 	}
-	for _, want := range []string{"&lt;script", "Content-Security-Policy", "@media(max-width:620px)", "@media print", "default-src 'none'", "JSONL and SQLite remain the source of truth"} {
+	for _, want := range []string{"&lt;script", "Content-Security-Policy", "@media(max-width:620px)", "@media print", "default-src 'none'", "JSONL and SQLite remain the source of truth", "min-width:900px", "overflow-x:auto", "overscroll-behavior-inline:contain", "word-break:normal"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("HTML missing %q", want)
 		}
@@ -188,6 +208,36 @@ func TestStandaloneHTMLIsEscapedDeterministicAndOffline(t *testing.T) {
 		if strings.Contains(strings.ToLower(html), forbidden) {
 			t.Fatalf("standalone HTML contains %q", forbidden)
 		}
+	}
+}
+
+func TestRenderedCoverageDoesNotClaimCompleteCaptureSuccess(t *testing.T) {
+	in := richReportInput(t, "normal", false)
+	in.Meta.Coverage.Process = runs.KernelCoverage{Availability: "available", Capture: "complete"}
+	in.Meta.Coverage.File = runs.KernelCoverage{Availability: "unavailable", Capture: "not_applicable"}
+	in.Meta.Coverage.Network = runs.KernelCoverage{Availability: "available", Capture: "partial", KnownLoss: runs.KnownLoss{PersistenceFailures: 2}}
+	report, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Render(&out, report); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		`class="coverage reported"`,
+		`capture: <code>complete</code>`,
+		"not independently verified",
+		`availability: <code>unavailable</code>`,
+		"persistence_failures=2",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("rendered coverage missing %q", want)
+		}
+	}
+	if strings.Contains(html, `class="coverage good"`) {
+		t.Fatal("reported complete capture was rendered as a green success state")
 	}
 }
 

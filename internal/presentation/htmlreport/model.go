@@ -95,12 +95,13 @@ type ObservationCounts struct {
 }
 
 type CoverageItem struct {
-	Name         string
-	Availability string
-	Capture      string
-	KnownLoss    uint64
-	LossDetail   string
-	Class        string
+	Name           string
+	Availability   string
+	Capture        string
+	KnownLoss      uint64
+	LossDetail     string
+	Interpretation string
+	Class          string
 }
 
 type ExecRow struct {
@@ -396,11 +397,31 @@ func buildCoverage(c runs.Coverage) []CoverageItem {
 func coverageItem(name string, c runs.KernelCoverage) CoverageItem {
 	availability := valueOr(c.Availability, "unknown")
 	capture := valueOr(c.Capture, "unknown")
+	knownLoss := c.KnownLoss.Total()
 	class := "neutral"
-	if capture == "unknown" || capture == "partial" || c.KnownLoss.Total() > 0 {
+	interpretations := []string{}
+	if availability != "available" {
 		class = "warning"
-	} else if capture == "complete" {
-		class = "good"
+		interpretations = append(interpretations, "Collection was not reported available; absence of retained observations does not prove inactivity.")
+	}
+	if knownLoss > 0 {
+		class = "warning"
+		interpretations = append(interpretations, "The Run reports known collection or persistence loss; retained observations are incomplete.")
+	}
+	switch capture {
+	case "partial":
+		class = "warning"
+		interpretations = append(interpretations, "The Run reports partial capture; retained observations are incomplete.")
+	case "unknown":
+		class = "warning"
+		interpretations = append(interpretations, "Capture completeness is reported unknown.")
+	case "complete":
+		if class == "neutral" {
+			class = "reported"
+		}
+		interpretations = append(interpretations, "The Run metadata reports complete capture; Logira has not independently verified that claim.")
+	default:
+		interpretations = append(interpretations, "The reported capture state is shown verbatim and is not an independently verified completeness claim.")
 	}
 	parts := []string{}
 	for _, p := range []struct {
@@ -415,11 +436,11 @@ func coverageItem(name string, c runs.KernelCoverage) CoverageItem {
 			parts = append(parts, fmt.Sprintf("%s=%d", p.name, p.value))
 		}
 	}
-	return CoverageItem{Name: name, Availability: availability, Capture: capture, KnownLoss: c.KnownLoss.Total(), LossDetail: strings.Join(parts, ", "), Class: class}
+	return CoverageItem{Name: name, Availability: availability, Capture: capture, KnownLoss: knownLoss, LossDetail: strings.Join(parts, ", "), Interpretation: strings.Join(interpretations, " "), Class: class}
 }
 
 func coverageNotes(meta runs.Meta, metadataSource string) []string {
-	notes := []string{"Coverage describes retained observations, not proof that all activity was captured. Zero known losses do not prove complete coverage."}
+	notes := []string{"Coverage values are reported Run metadata, not an independent verification of collection completeness. A reported capture=complete value and zero known losses do not prove that all activity was captured."}
 	if metadataSource == "missing" {
 		notes = append(notes, "Run metadata is missing; finalization and reported capture state are unknown.")
 	}
