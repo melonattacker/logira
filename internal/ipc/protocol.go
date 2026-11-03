@@ -86,8 +86,16 @@ type StatusRequest struct {
 	Type string `json:"type"`
 }
 
+type LateRunLoss struct {
+	RunID   string `json:"run_id"`
+	Process uint64 `json:"process"`
+	File    uint64 `json:"file"`
+	Network uint64 `json:"network"`
+}
+
 type StatusResponse struct {
-	Type string `json:"type"`
+	LateRunLoss []LateRunLoss `json:"late_run_loss,omitempty"`
+	Type        string        `json:"type"`
 
 	PID int `json:"pid"`
 	UID int `json:"uid"`

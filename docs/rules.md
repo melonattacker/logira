@@ -188,3 +188,14 @@ also accept `rename` and `create_or_open`. A `create` filter matches confirmed
 creation, not ambiguous `O_CREAT` opens. Truncation keeps `op=modify` for existing
 rules; inspect `syscall` and `flags` for its specific mechanism. Rename path
 matching currently uses the source path; the destination remains in `path2`.
+
+Credential-read risk rules F020–F024 now set `require_read_access: true`. This
+excludes known write-only and O_PATH opens and unknown access modes; legacy
+observations without mode metadata retain their old matching behavior. An open
+with read access is not proof that bytes were read. Custom open rules can omit
+this condition when they intentionally match all access modes.
+
+Successful correlated `O_CREAT|O_TRUNC` opens retain `op=create_or_open`, but also
+match `modify` op filters because truncation is write-risk evidence. They do not
+match create-only filters. Stored events and the `file.op` message variable are
+not rewritten, and one rule produces at most one detection for an event.

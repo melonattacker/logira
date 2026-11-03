@@ -39,9 +39,11 @@ type SessionManager struct {
 	collector collector.Collector
 	caps      CollectorCapabilities
 
-	mu          sync.Mutex
-	bySessionID map[string]*session
-	byCgroupID  map[uint64]*session
+	mu           sync.Mutex
+	bySessionID  map[string]*session
+	byCgroupID   map[uint64]*session
+	retired      map[uint64]*retiredSession
+	retiredOrder []uint64
 }
 
 type CollectorCapabilities struct {
@@ -60,6 +62,7 @@ func NewSessionManager(col collector.Collector, configured ...CollectorCapabilit
 		caps:        caps,
 		bySessionID: make(map[string]*session),
 		byCgroupID:  make(map[uint64]*session),
+		retired:     make(map[uint64]*retiredSession),
 	}
 }
 
@@ -82,9 +85,9 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 
 	// Basic DoS guard: limit concurrent sessions.
 	m.mu.Lock()
-	total := len(m.bySessionID)
+	total := len(m.byCgroupID)
 	perUID := 0
-	for _, s := range m.bySessionID {
+	for _, s := range m.byCgroupID {
 		if s.uid == cred.UID {
 			perUID++
 		}
@@ -193,17 +196,15 @@ func (m *SessionManager) StartRun(ctx context.Context, cred ipc.PeerCred, req ip
 	}
 
 	s := newSession(sessionID, cred.UID, cred.GID, homeDir, effectiveExec, effectiveFile, effectiveNet, base, runDir, meta, store, detector, cg, cgID)
-	if tracker, ok := m.collector.(collector.LossTracker); ok {
-		tracker.RegisterLossTarget(cgID)
-	}
 	m.mu.Lock()
 	if _, ok := m.bySessionID[sessionID]; ok {
 		m.mu.Unlock()
-		if tracker, ok := m.collector.(collector.LossTracker); ok {
-			_ = tracker.SnapshotAndUnregisterLossTarget(cgID)
-		}
 		_ = s.closeWithEnd(storage.NowUnixNanos(), collector.DropCounts{})
 		return out, fmt.Errorf("session id collision")
+	}
+	m.forgetRetiredLocked(cgID)
+	if tracker, ok := m.collector.(collector.LossTracker); ok {
+		tracker.RegisterLossTarget(cgID)
 	}
 	m.bySessionID[sessionID] = s
 	m.byCgroupID[cgID] = s
@@ -257,21 +258,47 @@ func (m *SessionManager) takeSessionForStop(sessionID string, uid int, requireUI
 	}
 
 	delete(m.bySessionID, sessionID)
-	delete(m.byCgroupID, s.cgroupID)
+	// Keep cgroup routing until the delivery fence and admitted queue drain.
 	return s, nil
 }
 
 func (m *SessionManager) finalizeSession(s *session, endTS int64) error {
-	var forward collector.DropCounts
+	s.meta.Coverage.DeliveryDrain = "unavailable"
+	if drainer, ok := m.collector.(collector.DeliveryDrainer); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := drainer.Drain(ctx)
+		cancel()
+		if err != nil {
+			s.meta.Coverage.DeliveryDrain = "failed"
+			s.meta.Coverage.DrainFailures++
+			log.Printf("delivery drain for run %s: %v", s.meta.RunID, err)
+		} else {
+			s.meta.Coverage.DeliveryDrain = "snapshot"
+		}
+	}
+	s.drainAdmitted()
 	if finalizer, ok := m.collector.(collector.FileCorrelationFinalizer); ok {
 		_ = finalizer.FinalizeFileCorrelation(s.cgroupID)
 	}
-	if tracker, ok := m.collector.(collector.LossTracker); ok {
+	// RouteEvent holds the same lock through enqueue. There can be no stale
+	// session pointer which enqueues after the metadata loss snapshot.
+	m.mu.Lock()
+	var forward collector.DropCounts
+	if tracker, ok := m.collector.(collector.LossSnapshotter); ok {
+		forward = tracker.SnapshotLossTarget(s.cgroupID)
+	} else if tracker, ok := m.collector.(collector.LossTracker); ok {
 		forward = tracker.SnapshotAndUnregisterLossTarget(s.cgroupID)
 	}
+	m.retireLocked(s, forward)
+	delete(m.byCgroupID, s.cgroupID)
+	m.mu.Unlock()
+	if now := storage.NowUnixNanos(); now > endTS {
+		endTS = now
+	}
 	err := s.closeWithEnd(endTS, forward)
-	// Best-effort cleanup.
-	_ = s.cg.Remove()
+	if s.cg != nil {
+		_ = s.cg.Remove()
+	}
 	return err
 }
 
@@ -363,17 +390,21 @@ func (m *SessionManager) AttachPID(ctx context.Context, cred ipc.PeerCred, sessi
 }
 
 func (m *SessionManager) RouteEvent(ev collector.Event) {
+	if ev.Barrier != nil {
+		ev.Barrier.Acknowledge()
+		return
+	}
 	cgID := extractCgroupID(ev.Type, ev.Detail)
 	if cgID == 0 {
 		return
 	}
 	m.mu.Lock()
-	s := m.byCgroupID[cgID]
-	m.mu.Unlock()
-	if s == nil {
-		return
+	defer m.mu.Unlock()
+	if s := m.byCgroupID[cgID]; s != nil {
+		s.enqueue(ev)
+	} else if retired := m.retired[cgID]; retired != nil {
+		retired.record(ev.Type)
 	}
-	s.enqueue(ev)
 }
 
 func extractCgroupID(typ string, detail json.RawMessage) uint64 {

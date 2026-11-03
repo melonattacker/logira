@@ -19,3 +19,6 @@ type ChildWaiter = common.ChildWaiter
 type DropCounts = common.DropCounts
 type LossTracker = common.LossTracker
 type FileCorrelationFinalizer = common.FileCorrelationFinalizer
+
+type DeliveryDrainer = common.DeliveryDrainer
+type LossSnapshotter = common.LossSnapshotter

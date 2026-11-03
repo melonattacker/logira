@@ -45,6 +45,8 @@ type session struct {
 	cgroupID uint64
 
 	in              chan collector.Event
+	shutdownDrops   lossCounters
+	drainOnce       sync.Once
 	queueDrops      lossCounters
 	persistFailures lossCounters
 	admitMu         sync.RWMutex
@@ -95,6 +97,7 @@ func (s *session) enqueue(ev collector.Event) {
 	s.admitMu.RLock()
 	defer s.admitMu.RUnlock()
 	if !s.accepting {
+		s.incrementLoss(&s.shutdownDrops, typ)
 		return
 	}
 	select {
@@ -106,11 +109,7 @@ func (s *session) enqueue(ev collector.Event) {
 
 func (s *session) closeWithEnd(endTS int64, forward collector.DropCounts) error {
 	s.stopOnce.Do(func() {
-		s.admitMu.Lock()
-		s.accepting = false
-		s.admitMu.Unlock()
-		close(s.stopCh)
-		<-s.stopped
+		s.drainAdmitted()
 		if err := s.store.Flush(); err != nil {
 			s.closeErr = errors.Join(s.closeErr, err)
 			s.meta.Coverage.FinalizationFailures++
@@ -136,6 +135,18 @@ func (s *session) closeWithEnd(endTS int64, forward collector.DropCounts) error 
 		_ = runs.BestEffortChownTree(s.runDir, s.uid, s.gid)
 	})
 	return s.closeErr
+}
+
+// drainAdmitted closes admission under the enqueue lock, then consumes every
+// admitted event. Routing remains registered until the manager retires it.
+func (s *session) drainAdmitted() {
+	s.drainOnce.Do(func() {
+		s.admitMu.Lock()
+		s.accepting = false
+		s.admitMu.Unlock()
+		close(s.stopCh)
+		<-s.stopped
+	})
 }
 
 func (s *session) loop() {
@@ -254,6 +265,19 @@ func (s *session) finalizeCoverage(forward collector.DropCounts) {
 	s.meta.Coverage.Process = s.kernelCoverage(s.enableExec, forward.Exec, s.queueDrops.exec.Load(), s.persistFailures.exec.Load())
 	s.meta.Coverage.File = s.kernelCoverage(s.enableFile, forward.File, s.queueDrops.file.Load(), s.persistFailures.file.Load(), forward.FileCorrelationFailures)
 	s.meta.Coverage.Network = s.kernelCoverage(s.enableNet, forward.Net, s.queueDrops.net.Load(), s.persistFailures.net.Load())
+	for _, c := range []struct {
+		coverage *runs.KernelCoverage
+		count    uint64
+	}{
+		{&s.meta.Coverage.Process, s.shutdownDrops.exec.Load()},
+		{&s.meta.Coverage.File, s.shutdownDrops.file.Load()},
+		{&s.meta.Coverage.Network, s.shutdownDrops.net.Load()},
+	} {
+		c.coverage.KnownLoss.ShutdownDropped = c.count
+		if c.count > 0 {
+			c.coverage.Capture = "partial"
+		}
+	}
 }
 
 func (s *session) kernelCoverage(enabled bool, forward, queued, persist uint64, correlation ...uint64) runs.KernelCoverage {
@@ -265,7 +289,7 @@ func (s *session) kernelCoverage(enabled bool, forward, queued, persist uint64, 
 	if len(correlation) > 0 {
 		correlationFailures = correlation[0]
 	}
-	if forward+queued+persist+correlationFailures > 0 || s.meta.Coverage.FinalizationFailures > 0 {
+	if forward+queued+persist+correlationFailures > 0 || s.meta.Coverage.FinalizationFailures > 0 || s.meta.Coverage.DrainFailures > 0 {
 		capture = "partial"
 	}
 	return runs.KernelCoverage{
@@ -369,7 +393,7 @@ func (s *session) resolveFilePath(d model.FileDetail, p string, dirfd *int) (str
 			procFD := fmt.Sprintf("/proc/%d/fd/%d", d.TGID, *dirfd)
 			if info, err := os.Stat(procFD); err == nil && info.IsDir() {
 				if base, err := os.Readlink(procFD); err == nil && filepath.IsAbs(base) {
-					return strings.TrimRight(base, "/") + "/" + p, "dirfd"
+					return strings.TrimRight(base, "/") + "/" + p, "proc_dirfd_best_effort"
 				}
 			}
 			// A non-AT_FDCWD path cannot safely fall back to process CWD.
@@ -377,7 +401,7 @@ func (s *session) resolveFilePath(d model.FileDetail, p string, dirfd *int) (str
 		}
 		if dirfd == nil || *dirfd == unix.AT_FDCWD {
 			if cwd, err := os.Readlink(fmt.Sprintf("/proc/%d/cwd", d.TGID)); err == nil && cwd != "" {
-				return strings.TrimRight(cwd, "/") + "/" + p, "cwd"
+				return strings.TrimRight(cwd, "/") + "/" + p, "proc_cwd_best_effort"
 			}
 		}
 	}

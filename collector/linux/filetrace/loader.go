@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/collector/linux/internal/delivery"
 	"github.com/melonattacker/logira/internal/model"
 )
 
@@ -103,6 +104,7 @@ type StageCounters struct {
 }
 
 type Tracer struct {
+	fence          *delivery.Fence
 	stopCh         chan struct{}
 	mu             sync.Mutex
 	coll           *ebpf.Collection
@@ -240,6 +242,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	out := make(chan collector.Event, 2048)
 	t.coll = coll
 	t.links = links
+	t.fence = delivery.New()
 	t.reader = rdr
 	t.out = out
 	t.stopCh = make(chan struct{})
@@ -264,6 +267,10 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		rec, err := t.reader.Read()
+		if errors.Is(err, ringbuf.ErrFlushed) {
+			t.fence.Forward(out)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
@@ -284,35 +291,7 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			continue
 		}
 
-		fd, dirfd := int(raw.FD), int(raw.DirFD)
-		detail := model.FileDetail{
-			Op:           op,
-			Syscall:      syscallName(raw.Syscall),
-			Correlation:  correlationName(raw.Correlation),
-			Path:         cString(raw.Path[:]),
-			Path2:        cString(raw.Path2[:]),
-			Flags:        raw.Flags,
-			ReturnValue:  raw.ReturnValue,
-			PID:          int(raw.TGID),
-			TID:          int(raw.TID),
-			TGID:         int(raw.TGID),
-			UID:          int(raw.UID),
-			KernelTimeNS: raw.TSNS,
-			CgroupID:     raw.CgroupID,
-		}
-		if raw.Kind == 2 && raw.ReturnValue > 0 {
-			detail.Bytes = raw.ReturnValue
-		}
-		if raw.FD >= 0 {
-			detail.FD = &fd
-		}
-		if raw.Correlation == 1 {
-			detail.DirFD = &dirfd
-			if raw.Kind == 3 {
-				dirfd2 := int(raw.DirFD2)
-				detail.DirFD2 = &dirfd2
-			}
-		}
+		detail := fileDetail(raw)
 		b, err := json.Marshal(detail)
 		if err != nil {
 			continue
@@ -508,4 +487,54 @@ func syscallName(value uint32) string {
 		return "unknown"
 	}
 	return names[value]
+}
+
+func (t *Tracer) Drain(ctx context.Context) error {
+	t.mu.Lock()
+	reader, fence := t.reader, t.fence
+
+	t.mu.Unlock()
+	if reader == nil || fence == nil {
+		return fmt.Errorf("tracer is not started")
+	}
+	if err := fence.Drain(ctx, reader.Flush); err != nil {
+		return err
+	}
+	return nil
+}
+
+func fileDetail(raw rawFileEvent) model.FileDetail {
+	fd, dirfd := int(raw.FD), int(raw.DirFD)
+	detail := model.FileDetail{
+		Op:           opFromRaw(raw),
+		Syscall:      syscallName(raw.Syscall),
+		Correlation:  correlationName(raw.Correlation),
+		Path:         cString(raw.Path[:]),
+		Path2:        cString(raw.Path2[:]),
+		Flags:        raw.Flags,
+		ReturnValue:  raw.ReturnValue,
+		PID:          int(raw.TGID),
+		TID:          int(raw.TID),
+		TGID:         int(raw.TGID),
+		UID:          int(raw.UID),
+		KernelTimeNS: raw.TSNS,
+		CgroupID:     raw.CgroupID,
+	}
+	if raw.Kind == 1 && raw.Correlation == 1 && raw.ReturnValue >= 0 {
+		detail.AccessMode = model.LinuxOpenAccessMode(raw.Flags)
+	}
+	if raw.Kind == 2 && raw.ReturnValue > 0 {
+		detail.Bytes = raw.ReturnValue
+	}
+	if raw.FD >= 0 {
+		detail.FD = &fd
+	}
+	if raw.Correlation == 1 {
+		detail.DirFD = &dirfd
+		if raw.Kind == 3 {
+			dirfd2 := int(raw.DirFD2)
+			detail.DirFD2 = &dirfd2
+		}
+	}
+	return detail
 }

@@ -138,13 +138,14 @@ func (s *Server) handleConn(ctx context.Context, c *net.UnixConn) {
 	case ipc.MsgTypeStatus:
 		// No request fields beyond type.
 		resp := ipc.StatusResponse{
-			Type:       ipc.MsgTypeStatusOK,
-			PID:        os.Getpid(),
-			UID:        os.Geteuid(),
-			GID:        os.Getegid(),
-			EnableExec: s.cfg.EnableExec,
-			EnableFile: s.cfg.EnableFile,
-			EnableNet:  s.cfg.EnableNet,
+			LateRunLoss: s.sessions.LateRunLoss(cred.UID),
+			Type:        ipc.MsgTypeStatusOK,
+			PID:         os.Getpid(),
+			UID:         os.Geteuid(),
+			GID:         os.Getegid(),
+			EnableExec:  s.cfg.EnableExec,
+			EnableFile:  s.cfg.EnableFile,
+			EnableNet:   s.cfg.EnableNet,
 		}
 		_, _ = c.Write(ipc.MustLine(resp))
 	default:

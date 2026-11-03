@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/collector/linux/internal/delivery"
 	"github.com/melonattacker/logira/internal/model"
 )
 
@@ -43,6 +44,7 @@ type rawNetEvent struct {
 const netEventWireSize = 72
 
 type Tracer struct {
+	fence   *delivery.Fence
 	stopCh  chan struct{}
 	mu      sync.Mutex
 	coll    *ebpf.Collection
@@ -165,6 +167,7 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	out := make(chan collector.Event, 2048)
 	t.coll = coll
 	t.links = links
+	t.fence = delivery.New()
 	t.reader = rdr
 	t.out = out
 	t.stopCh = make(chan struct{})
@@ -189,6 +192,10 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		rec, err := t.reader.Read()
+		if errors.Is(err, ringbuf.ErrFlushed) {
+			t.fence.Forward(out)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
@@ -413,4 +420,18 @@ func uniquePaths(paths []string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+func (t *Tracer) Drain(ctx context.Context) error {
+	t.mu.Lock()
+	reader, fence := t.reader, t.fence
+
+	t.mu.Unlock()
+	if reader == nil || fence == nil {
+		return fmt.Errorf("tracer is not started")
+	}
+	if err := fence.Drain(ctx, reader.Flush); err != nil {
+		return err
+	}
+	return nil
 }

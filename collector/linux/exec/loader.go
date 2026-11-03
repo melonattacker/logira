@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/collector/linux/internal/delivery"
 	"github.com/melonattacker/logira/internal/model"
 )
 
@@ -67,8 +68,10 @@ type rawProcessEvent struct {
 }
 
 type Tracer struct {
-	stopCh chan struct{}
-	cfg    Config
+	fence        *delivery.Fence
+	processFence *delivery.Fence
+	stopCh       chan struct{}
+	cfg          Config
 
 	mu            sync.Mutex
 	coll          *ebpf.Collection
@@ -187,7 +190,9 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	out := make(chan collector.Event, 2048)
 	t.coll = coll
 	t.links = links
+	t.fence = delivery.New()
 	t.reader = rdr
+	t.processFence = delivery.New()
 	t.processReader = processRdr
 	t.out = out
 	t.stopCh = make(chan struct{})
@@ -219,6 +224,10 @@ func (t *Tracer) consumeExec(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		rec, err := t.reader.Read()
+		if errors.Is(err, ringbuf.ErrFlushed) {
+			t.fence.Forward(out)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
@@ -290,6 +299,10 @@ func (t *Tracer) consumeProcess(ctx context.Context, out chan<- collector.Event)
 		}
 
 		rec, err := t.processReader.Read()
+		if errors.Is(err, ringbuf.ErrFlushed) {
+			t.processFence.Forward(out)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
@@ -505,4 +518,19 @@ func processDetail(raw rawProcessEvent) (model.ProcessDetail, error) {
 		}
 	}
 	return detail, nil
+}
+
+func (t *Tracer) Drain(ctx context.Context) error {
+	t.mu.Lock()
+	reader, fence := t.reader, t.fence
+
+	processReader, processFence := t.processReader, t.processFence
+	t.mu.Unlock()
+	if reader == nil || fence == nil {
+		return fmt.Errorf("tracer is not started")
+	}
+	if err := fence.Drain(ctx, reader.Flush); err != nil {
+		return err
+	}
+	return processFence.Drain(ctx, processReader.Flush)
 }

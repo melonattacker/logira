@@ -190,8 +190,9 @@ Routine opens are retained only when relevant to active file detection rules.
 Chdir and descriptor operations support correlation and are not persisted by
 default. `--watch` does not filter events. A create-only rule does not produce a
 create detection for `create_or_open`; that evidence is still retained. Existing
-`modify` rules continue to match truncation. New rule op values include `rename`
-and `create_or_open`; built-in detection rules are otherwise unchanged.
+`modify` rules continue to match truncation, including confirmed truncating
+`create_or_open` events. New rule op values include `rename`
+and `create_or_open`. Credential-open rules require read-capable access.
 
 Descriptor provenance is bounded and best-effort. Successful opens and dup calls
 support later write-path attribution. `fd_open_path` denotes the name observed
@@ -258,8 +259,9 @@ Counters describe failure occurrences, not distinct missing events: correlation
 and forwarding failures can overlap. They exclude deliberate retention filtering.
 File tracer stage counters are system-wide diagnostics, not per-run loss counts.
 Ring-buffer reservation failures, map pressure, decode errors and late events at
-shutdown are not all attributed to runs. Session close drains already-admitted
-queue entries but does not establish a kernel-buffer drain barrier. Zero counters
+shutdown are not all attributed to runs. Session close flushes a snapshot of each ring buffer through userspace delivery
+barriers before draining admitted queue entries. It does not establish an atomic
+end of kernel activity. Zero counters
 or an empty event stream must never be interpreted as proof of no activity.
 Old runs without coverage have unknown coverage, not complete coverage.
 
@@ -269,3 +271,57 @@ system-wide tracing overhead, bounded kernel maps/ring buffers, and more disk
 traffic for mutation-heavy runs. Retention filtering occurs after collection;
 it reduces persisted routine opens, not the cost of observing them. No event
 coalescing or per-path deduplication is claimed.
+
+## Access-mode and shutdown corrections
+
+Successful correlated `openat/openat2` observations add `access_mode`:
+`read_only`, `write_only`, `read_write`, `path_only` (O_PATH), or `unknown`.
+This describes descriptor access, not an actual read or write. `op=open` still
+means an open without a confirmed mutation, including write-only opens.
+Credential rules F020–F024 use `require_read_access: true`: write-only, O_PATH,
+and unknown modes do not match. Read-only and read-write opens can produce
+read-access risk alerts, whose messages now say “read-capable open”. Older file
+observations without access metadata retain legacy matching behavior; their
+access mode and any actual reads remain unknown.
+
+For a correlated successful `O_CREAT|O_TRUNC` open, the event remains
+`create_or_open`. The rule engine also considers its truncation as `modify`
+evidence when matching op filters. It matches each rule at most once, leaves
+message `file.op` and stored evidence unchanged, and never satisfies a
+create-only rule on this basis. Failed, incomplete and O_PATH observations do
+not gain modification evidence from these flags.
+
+Relative-path enrichment now uses `path_resolution=proc_cwd_best_effort` or
+`proc_dirfd_best_effort` (and the corresponding `path_resolution2`). These names
+explicitly describe a userspace lookup after the syscall. The resulting `path`
+is a candidate location, not an authoritative syscall-time path; chdir, dirfd
+reuse, process exit/PID reuse, and mount changes can race with enrichment.
+`raw_path` and `dirfd` retain the original argument evidence. Absolute syscall
+arguments and unresolved FD-open provenance keep their existing distinct labels.
+
+On stop, cgroup routing stays active while flush markers from each ring-buffer
+reader traverse its output channel and the daemon routing queue. Markers cannot
+be dropped due to backpressure. Only after acknowledgement does the session
+close admission and drain all admitted events. This is a per-reader snapshot,
+not a global kernel cutoff: in-flight/new operations can still arrive later.
+The total drain wait is bounded at two seconds. Metadata adds
+`coverage.delivery_drain=snapshot|failed|unavailable`; a failed/timed-out drain
+increments `coverage.drain_failures` and makes enabled categories partial.
+
+Events reaching a closing session after admission closes but before routing is
+retired increment per-category `known_loss.shutdown_dropped`, persisted with the
+final coverage snapshot. Routing and retirement are synchronized so no caller
+can retain a stale session pointer and silently enqueue after that snapshot.
+Subsequent late deliveries and collector forwarding drops are counted separately
+for the most recent 256 retired cgroups. `logira status` / `status --json` expose
+these supplemental counters as `late_run_loss` with per-run process/file/network
+counts, restricted to the owner (root may see all). The first late delivery per
+category is logged; final totals are logged on eviction or cgroup ID reuse.
+
+Late counters are in-memory supplements, not updates to finalized metadata:
+the root daemon does not reopen finalized user-owned audit files. Retired routes
+and their collector loss targets expire after 256 newer retirements, ID reuse,
+or daemon restart. Events beyond that accounting window cannot be attributed
+to the old run. Kernel losses before decode, operations beyond the flush snapshot,
+and unavailable collector drain support remain limitations. Neither a successful
+snapshot drain nor zero late counters implies complete capture or no activity.

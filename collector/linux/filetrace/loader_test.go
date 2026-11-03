@@ -83,3 +83,20 @@ func TestFailedSyscallsAreNotEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestFileDetailPreservesOpenAccessModes(t *testing.T) {
+	for flags, want := range map[uint32]string{0: "read_only", 1: "write_only", 2: "read_write", 0x200000: "path_only", 3: "unknown"} {
+		raw := rawFileEvent{Kind: 1, Syscall: 1, Correlation: 1, ReturnValue: 7, Flags: flags}
+		d := fileDetail(raw)
+		if d.Op != "open" || d.AccessMode != want || d.Flags != flags {
+			t.Fatalf("flags=%#x detail=%+v", flags, d)
+		}
+	}
+	d := fileDetail(rawFileEvent{Kind: 1, Syscall: 2, Correlation: 1, ReturnValue: 7, Flags: 0x40 | 0x200 | 1})
+	if d.Op != "create_or_open" || !d.TruncatingOpen() || d.AccessMode != "write_only" {
+		t.Fatalf("truncating open=%+v", d)
+	}
+	if d := fileDetail(rawFileEvent{Kind: 1, Correlation: 2, Flags: 1}); d.AccessMode != "" {
+		t.Fatal("invented access mode without correlation")
+	}
+}

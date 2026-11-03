@@ -25,12 +25,13 @@ type WhenClause struct {
 }
 
 type FileWhen struct {
-	Prefix         string   `yaml:"prefix"`
-	PrefixAny      []string `yaml:"prefix_any"`
-	PathIn         []string `yaml:"path_in"`
-	PathRegex      string   `yaml:"path_regex"`
-	OpIn           []string `yaml:"op_in"`
-	RequireExecBit bool     `yaml:"require_exec_bit"`
+	RequireReadAccess bool     `yaml:"require_read_access"`
+	Prefix            string   `yaml:"prefix"`
+	PrefixAny         []string `yaml:"prefix_any"`
+	PathIn            []string `yaml:"path_in"`
+	PathRegex         string   `yaml:"path_regex"`
+	OpIn              []string `yaml:"op_in"`
+	RequireExecBit    bool     `yaml:"require_exec_bit"`
 
 	pathRegexRE *regexp.Regexp `yaml:"-"`
 }

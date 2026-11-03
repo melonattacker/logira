@@ -5,6 +5,7 @@ package logirad
 import (
 	"encoding/json"
 	"github.com/melonattacker/logira/internal/detect"
+	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -69,7 +70,7 @@ func TestNormalizeFileDetailResolvesRelativeOpenatAgainstDirFD(t *testing.T) {
 	if want := filepath.Join(base, "child.txt"); d.Path != want {
 		t.Fatalf("path=%q, want %q", d.Path, want)
 	}
-	if d.RawPath != "child.txt" || d.PathResolution != "dirfd" {
+	if d.RawPath != "child.txt" || d.PathResolution != "proc_dirfd_best_effort" {
 		t.Fatalf("resolution metadata=%+v", d)
 	}
 }
@@ -107,7 +108,7 @@ func TestNormalizeFileDetailDoesNotResolveThroughReusableReturnedFD(t *testing.T
 	b, _ := json.Marshal(model.FileDetail{Op: "open", Path: "actual.txt", FD: &fd, DirFD: &atFDCWD})
 
 	d, ok := s.normalizeFileDetail(collector.Event{PID: os.Getpid(), UID: os.Getuid(), Detail: b})
-	if !ok || d.Path != filepath.Join(cwd, "actual.txt") || d.PathResolution != "cwd" {
+	if !ok || d.Path != filepath.Join(cwd, "actual.txt") || d.PathResolution != "proc_cwd_best_effort" {
 		t.Fatalf("detail=%+v ok=%v", d, ok)
 	}
 }
@@ -357,5 +358,29 @@ func TestRawPathsPreserveWhitespaceAndSymlinkTraversal(t *testing.T) {
 		if !ok || d.Path != path || d.RawPath != path {
 			t.Fatalf("path %q altered: %+v", path, d)
 		}
+	}
+}
+
+func TestReusedDirFDIsExplicitlyBestEffort(t *testing.T) {
+	before, after := t.TempDir(), t.TempDir()
+	fd, err := unix.Open(before, unix.O_DIRECTORY|unix.O_RDONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = unix.Close(fd) }()
+	// Capture the syscall argument, then reuse its dirfd before normalization.
+	raw, _ := json.Marshal(model.FileDetail{Op: "create_or_open", Path: "target", DirFD: &fd})
+	replacement, err := unix.Open(after, unix.O_DIRECTORY|unix.O_RDONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = unix.Close(replacement) }()
+	if err := unix.Dup3(replacement, fd, 0); err != nil {
+		t.Fatal(err)
+	}
+	s := &session{meta: runs.Meta{Version: 5}}
+	d, ok := s.normalizeFileDetail(collector.Event{PID: os.Getpid(), Detail: raw})
+	if !ok || d.RawPath != "target" || d.Path != filepath.Join(after, "target") || d.PathResolution != "proc_dirfd_best_effort" {
+		t.Fatalf("stale lookup presented without uncertainty: %+v", d)
 	}
 }

@@ -16,12 +16,13 @@ const (
 var ErrLinuxOnly = errors.New("logira collector is only supported on linux")
 
 type Event struct {
-	Type      string          `json:"type"`
-	Timestamp string          `json:"timestamp"`
-	PID       int             `json:"pid,omitempty"`
-	PPID      int             `json:"ppid,omitempty"`
-	UID       int             `json:"uid,omitempty"`
-	Detail    json.RawMessage `json:"detail"`
+	Barrier   *DeliveryBarrier `json:"-"`
+	Type      string           `json:"type"`
+	Timestamp string           `json:"timestamp"`
+	PID       int              `json:"pid,omitempty"`
+	PPID      int              `json:"ppid,omitempty"`
+	UID       int              `json:"uid,omitempty"`
+	Detail    json.RawMessage  `json:"detail"`
 }
 
 type Config struct {
@@ -66,4 +67,33 @@ type LossTracker interface {
 // cgroup and reports the number that had no observed exit.
 type FileCorrelationFinalizer interface {
 	FinalizeFileCorrelation(cgroupID uint64) uint64
+}
+
+// DeliveryBarrier is internal queue control, never a persisted audit event.
+// Forwarding must not drop it under backpressure. The daemon acknowledges it
+// only after routing all preceding records from that reader.
+type DeliveryBarrier struct {
+	Ack  chan struct{}
+	Done <-chan struct{}
+}
+
+func (b *DeliveryBarrier) Forward(out chan<- Event) {
+	select {
+	case out <- Event{Barrier: b}:
+	case <-b.Done:
+	}
+}
+func (b *DeliveryBarrier) Acknowledge() {
+	select {
+	case b.Ack <- struct{}{}:
+	default:
+	}
+}
+
+type DeliveryDrainer interface{ Drain(context.Context) error }
+
+// LossSnapshotter keeps a bounded retired target observable after finalization.
+type LossSnapshotter interface {
+	LossTracker
+	SnapshotLossTarget(cgroupID uint64) DropCounts
 }

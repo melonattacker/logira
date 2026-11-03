@@ -170,8 +170,22 @@ func (e *Engine) matchFileRule(r Rule, d model.FileDetail, path string) bool {
 	if w == nil {
 		return false
 	}
-	if !stringInSlice(strings.ToLower(strings.TrimSpace(d.Op)), w.OpIn) {
+	// A successful truncating open is modification evidence even when
+	// creation remains ambiguous. Match once and preserve the original op.
+	opMatch := stringInSlice(strings.ToLower(strings.TrimSpace(d.Op)), w.OpIn)
+	if d.Op == "create_or_open" && d.TruncatingOpen() && stringInSlice("modify", w.OpIn) {
+		opMatch = true
+	}
+	if !opMatch {
 		return false
+	}
+	if w.RequireReadAccess {
+		switch d.OpenAccessMode() {
+		case "write_only", "path_only", "unknown":
+			return false
+		}
+		// Empty mode preserves compatibility with legacy observations that
+		// did not record access flags. It does not prove an actual read.
 	}
 	if !matchFilePath(w, e.home, path) {
 		return false

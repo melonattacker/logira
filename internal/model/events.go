@@ -35,6 +35,7 @@ type ProcessDetail struct {
 }
 
 type FileDetail struct {
+	AccessMode        string `json:"access_mode,omitempty"`
 	Op                string `json:"op"`
 	Syscall           string `json:"syscall,omitempty"`
 	Correlation       string `json:"correlation,omitempty"`
@@ -78,4 +79,37 @@ type NetDetail struct {
 	TGID              int    `json:"tgid,omitempty"`
 	TaskStartKernelNS uint64 `json:"task_start_kernel_ns,omitempty"`
 	KernelTimeNS      uint64 `json:"kernel_time_ns,omitempty"`
+}
+
+// LinuxOpenAccessMode describes descriptor access, not evidence that a read or
+// write actually occurred. O_PATH does not grant either form of data access.
+func LinuxOpenAccessMode(flags uint32) string {
+	if flags&0x200000 != 0 {
+		return "path_only"
+	}
+	switch flags & 3 {
+	case 0:
+		return "read_only"
+	case 1:
+		return "write_only"
+	case 2:
+		return "read_write"
+	default:
+		return "unknown"
+	}
+}
+
+func (d FileDetail) SuccessfulOpen() bool {
+	return (d.Syscall == "openat" || d.Syscall == "openat2") && d.Correlation == "complete" && d.ReturnValue >= 0
+}
+
+func (d FileDetail) OpenAccessMode() string {
+	if d.SuccessfulOpen() {
+		return LinuxOpenAccessMode(d.Flags)
+	}
+	return d.AccessMode
+}
+
+func (d FileDetail) TruncatingOpen() bool {
+	return d.SuccessfulOpen() && d.Flags&0x200 != 0 && d.OpenAccessMode() != "path_only"
 }

@@ -191,6 +191,10 @@ func (lc *LinuxCollector) WaitForIdle(ctx context.Context) error {
 }
 
 func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.Event) {
+	if ev.Barrier != nil {
+		ev.Barrier.Forward(out)
+		return
+	}
 	if ev.Timestamp == "" {
 		ev.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
@@ -325,4 +329,29 @@ func procPPID(pid int) int {
 		return 0
 	}
 	return ppid
+}
+
+func (lc *LinuxCollector) Drain(ctx context.Context) error {
+	if lc.execTracer != nil {
+		if err := lc.execTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	if lc.fileTracer != nil {
+		if err := lc.fileTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	if lc.netTracer != nil {
+		if err := lc.netTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (lc *LinuxCollector) SnapshotLossTarget(cgroupID uint64) collector.DropCounts {
+	lc.lossMu.Lock()
+	defer lc.lossMu.Unlock()
+	return lc.lossTargets[cgroupID]
 }
