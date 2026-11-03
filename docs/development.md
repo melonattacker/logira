@@ -40,6 +40,8 @@ root privileges or active collectors. Focused analysis tests:
 ```bash
 go test ./internal/analysis/... ./internal/storage
 go test ./internal/cli -run Episode
+go test ./internal/cli -run Report
+go test ./internal/presentation/htmlreport
 go test ./internal/analysis/episode -run '^$' -bench DeepLineage -benchmem
 ```
 
@@ -48,6 +50,17 @@ Before submitting changes, format changed Go files and run `go test ./...`,
 `golangci-lint run --timeout=5m`. Offline smoke tests can select an existing
 saved exec with `logira episode <run-id> --exec-seq <seq> --json`; this does not
 validate privileged runtime capture.
+
+HTML report smoke tests are also rootless and read-only with respect to Run
+storage:
+
+```bash
+./logira report <run-id> --output ./overview.html
+./logira report <run-id> --exec-seq <seq> --output ./episode.html
+```
+
+Open both files locally using `file://` and inspect desktop, narrow/mobile, and
+print layouts. Report generation does not validate privileged runtime capture.
 
 Integration tests (Linux + root):
 

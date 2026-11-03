@@ -11,8 +11,6 @@ import (
 
 	"github.com/melonattacker/logira/internal/analysis/episode"
 	"github.com/melonattacker/logira/internal/analysis/processgraph"
-	"github.com/melonattacker/logira/internal/runs"
-	"github.com/melonattacker/logira/internal/storage"
 )
 
 func EpisodeCommand(ctx context.Context, args []string) error {
@@ -45,37 +43,20 @@ func episodeCommand(ctx context.Context, args []string, w io.Writer) error {
 	if seq <= 0 {
 		return fmt.Errorf("episode requires --exec-seq with a positive integer; find one with 'logira query %s --type exec'", sel)
 	}
-	runID, runDir, err := runs.ResolveExistingRun(sel)
+	analysis, err := loadAnalysisRun(ctx, sel)
 	if err != nil {
 		return err
 	}
-	snapshot, err := storage.ReadAnalysisSnapshot(ctx, runDir, runID)
-	if err != nil {
-		return err
-	}
-	meta := runs.Meta{RunID: runID}
-	if len(snapshot.MetaJSON) > 0 {
-		if err := json.Unmarshal(snapshot.MetaJSON, &meta); err != nil {
-			return fmt.Errorf("decode %s metadata: %w", snapshot.MetadataSource, err)
-		}
-		if strings.TrimSpace(string(snapshot.MetaJSON)) == "null" {
-			return fmt.Errorf("%s metadata must be an object", snapshot.MetadataSource)
-		}
-	}
-	g, err := processgraph.Build(runID, snapshot.Events)
-	if err != nil {
-		return err
-	}
-	ep, err := episode.Build(meta, seq, g)
+	ep, err := episode.Build(analysis.Meta, seq, analysis.Graph)
 	if err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	ep.AnalysisSource.Events = snapshot.EventSource
-	ep.AnalysisSource.Metadata = snapshot.MetadataSource
-	if snapshot.MetadataSource == "missing" {
+	ep.AnalysisSource.Events = analysis.Snapshot.EventSource
+	ep.AnalysisSource.Metadata = analysis.Snapshot.MetadataSource
+	if analysis.Snapshot.MetadataSource == "missing" {
 		ep.Limitations = append(ep.Limitations, processgraph.Issue{Code: "missing_run_metadata"})
 		episode.SortLimitations(ep.Limitations)
 	}
