@@ -14,9 +14,8 @@ Custom rules use the same YAML format as the built-in rules in `internal/detect/
 - `--rules` appends your custom rules to the built-in set for that run.
 - Rule IDs must be unique across the merged set (built-in + custom).
 - Invalid YAML / invalid rule schema causes `logira run` to fail before the run starts.
-- File event retention is rule-driven:
-  - file events are only recorded if they match at least one active file rule
-  - adding file rules may increase stored file-event volume
+- State-changing file evidence is retained for every ordinary run.
+- Routine opens are retained when relevant to active file rules; adding rules may increase event volume.
 
 ## Top-Level YAML Format
 
@@ -180,3 +179,23 @@ Examples of invalid rules that `logira run --rules` will reject:
 - Quick trial rules: [`examples/rules/quickstart.yaml`](../examples/rules/quickstart.yaml)
 - Trial commands and notes: [`examples/rules/README.md`](../examples/rules/README.md)
 
+
+## File lifecycle evidence
+
+Ordinary runs retain state-changing file evidence independently of file rules;
+rules continue to control routine-open retention and detections. File op filters
+also accept `rename` and `create_or_open`. A `create` filter matches confirmed
+creation, not ambiguous `O_CREAT` opens. Truncation keeps `op=modify` for existing
+rules; inspect `syscall` and `flags` for its specific mechanism. Rename path
+matching currently uses the source path; the destination remains in `path2`.
+
+Credential-read risk rules F020–F024 now set `require_read_access: true`. This
+excludes known write-only and O_PATH opens and unknown access modes; legacy
+observations without mode metadata retain their old matching behavior. An open
+with read access is not proof that bytes were read. Custom open rules can omit
+this condition when they intentionally match all access modes.
+
+Successful correlated `O_CREAT|O_TRUNC` opens retain `op=create_or_open`, but also
+match `modify` op filters because truncation is write-risk evidence. They do not
+match create-only filters. Stored events and the `file.op` message variable are
+not rewritten, and one rule produces at most one detection for an event.

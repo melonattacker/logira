@@ -56,3 +56,10 @@ func (jw *JSONLWriter) Close() error {
 	}
 	return ret
 }
+
+// Flush reports buffered write failures before coverage metadata is finalized.
+func (jw *JSONLWriter) Flush() error {
+	jw.mu.Lock()
+	defer jw.mu.Unlock()
+	return jw.w.Flush()
+}

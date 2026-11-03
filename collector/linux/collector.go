@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +18,7 @@ import (
 	exectrace "github.com/melonattacker/logira/collector/linux/exec"
 	filetrace "github.com/melonattacker/logira/collector/linux/filetrace"
 	nettrace "github.com/melonattacker/logira/collector/linux/net"
+	"github.com/melonattacker/logira/internal/model"
 )
 
 type LinuxCollector struct {
@@ -28,8 +28,10 @@ type LinuxCollector struct {
 	netTracer  *nettrace.Tracer
 	fileTracer *filetrace.Tracer
 
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	lossMu      sync.Mutex
+	lossTargets map[uint64]collector.DropCounts
 }
 
 func NewCollector(cfg collector.Config) *LinuxCollector {
@@ -46,7 +48,7 @@ func NewCollector(cfg collector.Config) *LinuxCollector {
 		cfg.WatchPaths = []string{"."}
 	}
 
-	return &LinuxCollector{cfg: cfg}
+	return &LinuxCollector{cfg: cfg, lossTargets: make(map[uint64]collector.DropCounts)}
 }
 
 func (lc *LinuxCollector) Init(ctx context.Context) error {
@@ -189,6 +191,10 @@ func (lc *LinuxCollector) WaitForIdle(ctx context.Context) error {
 }
 
 func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.Event) {
+	if ev.Barrier != nil {
+		ev.Barrier.Forward(out)
+		return
+	}
 	if ev.Timestamp == "" {
 		ev.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
@@ -199,12 +205,83 @@ func (lc *LinuxCollector) handleEvent(out chan<- collector.Event, ev collector.E
 		}
 		ev = lc.enrichExecCWD(ev)
 	}
+	if ev.Type == collector.EventTypeFile {
+		var detail struct {
+			CgroupID    uint64 `json:"cgroup_id"`
+			Correlation string `json:"correlation"`
+		}
+		if json.Unmarshal(ev.Detail, &detail) == nil && detail.CgroupID != 0 && detail.Correlation == "incomplete" {
+			lc.recordFileCorrelationFailure(detail.CgroupID, 1)
+		}
+	}
 
 	select {
 	case out <- ev:
 	default:
-		// Drop under backpressure.
+		lc.recordForwardDrop(ev)
 	}
+}
+
+func (lc *LinuxCollector) FinalizeFileCorrelation(cgroupID uint64) uint64 {
+	if lc.fileTracer == nil || cgroupID == 0 {
+		return 0
+	}
+	count := lc.fileTracer.FinalizeCgroup(cgroupID)
+	lc.recordFileCorrelationFailure(cgroupID, count)
+	return count
+}
+
+func (lc *LinuxCollector) recordFileCorrelationFailure(cgroupID, count uint64) {
+	if cgroupID == 0 || count == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	c, ok := lc.lossTargets[cgroupID]
+	if ok {
+		c.FileCorrelationFailures += count
+		lc.lossTargets[cgroupID] = c
+	}
+	lc.lossMu.Unlock()
+}
+
+func (lc *LinuxCollector) RegisterLossTarget(cgroupID uint64) {
+	if cgroupID == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	lc.lossTargets[cgroupID] = collector.DropCounts{}
+	lc.lossMu.Unlock()
+}
+
+func (lc *LinuxCollector) SnapshotAndUnregisterLossTarget(cgroupID uint64) collector.DropCounts {
+	lc.lossMu.Lock()
+	defer lc.lossMu.Unlock()
+	out := lc.lossTargets[cgroupID]
+	delete(lc.lossTargets, cgroupID)
+	return out
+}
+
+func (lc *LinuxCollector) recordForwardDrop(ev collector.Event) {
+	var x struct {
+		CgroupID uint64 `json:"cgroup_id"`
+	}
+	if json.Unmarshal(ev.Detail, &x) != nil || x.CgroupID == 0 {
+		return
+	}
+	lc.lossMu.Lock()
+	c, ok := lc.lossTargets[x.CgroupID]
+	if ok {
+		switch ev.Type {
+		case collector.EventTypeExec, collector.EventTypeProcess:
+			c.Exec++
+		case collector.EventTypeFile:
+			c.File++
+		case collector.EventTypeNet:
+			c.Net++
+		}
+		lc.lossTargets[x.CgroupID] = c
+	}
+	lc.lossMu.Unlock()
 }
 
 func (lc *LinuxCollector) enrichExecCWD(ev collector.Event) collector.Event {
@@ -212,11 +289,11 @@ func (lc *LinuxCollector) enrichExecCWD(ev collector.Event) collector.Event {
 		return ev
 	}
 
-	var detail map[string]any
+	var detail model.ExecDetail
 	if err := json.Unmarshal(ev.Detail, &detail); err != nil {
 		return ev
 	}
-	if _, ok := detail["cwd"]; ok {
+	if detail.CWD != "" {
 		return ev
 	}
 
@@ -224,10 +301,7 @@ func (lc *LinuxCollector) enrichExecCWD(ev collector.Event) collector.Event {
 	if err != nil {
 		return ev
 	}
-	if rel, rerr := filepath.Rel(".", cwd); rerr == nil && !strings.HasPrefix(rel, "..") {
-		cwd = rel
-	}
-	detail["cwd"] = cwd
+	detail.CWD = cwd
 	b, err := json.Marshal(detail)
 	if err != nil {
 		return ev
@@ -255,4 +329,29 @@ func procPPID(pid int) int {
 		return 0
 	}
 	return ppid
+}
+
+func (lc *LinuxCollector) Drain(ctx context.Context) error {
+	if lc.execTracer != nil {
+		if err := lc.execTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	if lc.fileTracer != nil {
+		if err := lc.fileTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	if lc.netTracer != nil {
+		if err := lc.netTracer.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (lc *LinuxCollector) SnapshotLossTarget(cgroupID uint64) collector.DropCounts {
+	lc.lossMu.Lock()
+	defer lc.lossMu.Unlock()
+	return lc.lossTargets[cgroupID]
 }

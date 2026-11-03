@@ -135,7 +135,7 @@ func renderRunEndSummary(w io.Writer, mode runSummaryMode, s runEndSummary) erro
 		if evt == nil {
 			evt = map[storage.EventType]int{}
 		}
-		if _, err := fmt.Fprintf(w, "  events:      %d exec, %d file, %d net\n", evt[storage.TypeExec], evt[storage.TypeFile], evt[storage.TypeNet]); err != nil {
+		if _, err := fmt.Fprintf(w, "  events:      %d exec, %d file, %d net, %d process\n", evt[storage.TypeExec], evt[storage.TypeFile], evt[storage.TypeNet], evt[storage.TypeProcess]); err != nil {
 			return err
 		}
 	}

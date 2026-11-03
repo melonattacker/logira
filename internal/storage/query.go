@@ -41,7 +41,7 @@ func (s *SQLite) Query(opts QueryOptions) ([]Event, error) {
 			return nil, err
 		}
 		return evs, nil
-	case TypeExec, TypeFile, TypeNet:
+	case TypeExec, TypeProcess, TypeFile, TypeNet:
 		if opts.RelatedToDetections {
 			return s.queryObservedRelatedToDetections(opts, limit)
 		}

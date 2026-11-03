@@ -65,3 +65,17 @@ CREATE INDEX idx_events_run_ts ON events(run_id, ts);
 CREATE INDEX idx_events_run_type ON events(run_id, type);
 CREATE INDEX idx_events_run_ts_type ON events(run_id, ts, type);
 ```
+
+## Additive OS telemetry
+
+`events.type` also accepts `process`; lifecycle details and new file/network fields
+remain in `data_json`. No tables or columns are removed or migrated. Existing
+JSONL and SQLite runs remain readable. `logira query --type process` selects the
+new lifecycle events; `--type exec` retains its existing meaning. For rename,
+`events.path` indexes the old path; the destination is available in `data_json`
+(and through `--contains`).
+
+`runs.meta_json` carries the same finalized coverage as `meta.json` after a
+successful close. Missing coverage in older runs means unknown. See
+[JSONL coverage semantics](jsonl.md#coverage-and-loss-accounting) for failure
+counts, partial persistence, observation gaps and shutdown limitations.

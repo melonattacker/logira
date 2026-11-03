@@ -169,7 +169,7 @@ func ViewCommand(ctx context.Context, args []string) error {
 	execCount := eventCounts[storage.TypeExec]
 	fileCount := eventCounts[storage.TypeFile]
 	netCount := eventCounts[storage.TypeNet]
-	stdoutf("Events       exec=%d  file=%d  net=%d\n", execCount, fileCount, netCount)
+	stdoutf("Events       exec=%d  file=%d  net=%d  process=%d\n", execCount, fileCount, netCount, eventCounts[storage.TypeProcess])
 	stdoutf("Detections   %d total  (info=%d low=%d med=%d high=%d)\n\n",
 		detTotal, sevCounts["info"], sevCounts["low"], sevCounts["medium"], sevCounts["high"],
 	)

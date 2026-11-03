@@ -3,7 +3,6 @@
 package nettrace
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -21,24 +20,32 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	collector "github.com/melonattacker/logira/collector/common"
+	"github.com/melonattacker/logira/collector/linux/internal/delivery"
 	"github.com/melonattacker/logira/internal/model"
 )
 
 type rawNetEvent struct {
-	TSNS     uint64
-	CgroupID uint64
-	PID      uint32
-	UID      uint32
-	Op       uint8
-	Proto    uint8
-	Pad1     uint16
-	IP4      uint32
-	Port     uint16
-	Pad2     uint16
-	Bytes    int64
+	ABIVersion   uint8
+	Op           uint8
+	Family       uint8
+	Proto        uint8
+	ConnectState uint8
+	Address      [16]byte
+	Port         uint16
+	TSNS         uint64
+	CgroupID     uint64
+	PID          uint32
+	TID          uint32
+	TGID         uint32
+	UID          uint32
+	Bytes        int64
 }
 
+const netEventWireSize = 72
+
 type Tracer struct {
+	fence   *delivery.Fence
+	stopCh  chan struct{}
 	mu      sync.Mutex
 	coll    *ebpf.Collection
 	links   []link.Link
@@ -105,6 +112,16 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 		name  string
 		prog  string
 	}{
+		{"sched", "sched_process_fork", "trace_fd_fork"},
+		{"sched", "sched_process_exec", "trace_fd_exec"},
+		{"syscalls", "sys_enter_close_range", "trace_fd_close_range"},
+		{"syscalls", "sys_exit_dup", "trace_fd_dup"},
+		{"syscalls", "sys_exit_dup2", "trace_fd_dup2"},
+		{"syscalls", "sys_exit_dup3", "trace_fd_dup3"},
+		{"syscalls", "sys_enter_socket", "trace_enter_socket"},
+		{"syscalls", "sys_exit_socket", "trace_exit_socket"},
+		{"syscalls", "sys_enter_close", "trace_enter_close"},
+		{"syscalls", "sys_exit_close", "trace_exit_close"},
 		{"syscalls", "sys_enter_connect", "trace_enter_connect"},
 		{"syscalls", "sys_exit_connect", "trace_exit_connect"},
 		{"syscalls", "sys_enter_sendto", "trace_enter_sendto"},
@@ -129,6 +146,13 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 			return nil, fmt.Errorf("net program %s not found", a.prog)
 		}
 		lnk, err := link.Tracepoint(a.group, a.name, prog, nil)
+		// close_range appeared after 5.8; legacy rename/unlink syscalls do not
+		// exist on every architecture. Missing hooks for absent syscalls are
+		// safe to skip; other attach failures remain fatal.
+		optional := a.name == "sys_enter_close_range" || a.name == "sys_enter_rename" || a.name == "sys_exit_rename" || a.name == "sys_enter_unlink" || a.name == "sys_exit_unlink"
+		if optional && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			for _, l := range links {
 				_ = l.Close()
@@ -143,8 +167,10 @@ func (t *Tracer) Start(ctx context.Context) (<-chan collector.Event, error) {
 	out := make(chan collector.Event, 2048)
 	t.coll = coll
 	t.links = links
+	t.fence = delivery.New()
 	t.reader = rdr
 	t.out = out
+	t.stopCh = make(chan struct{})
 	t.started = true
 
 	t.runWG.Add(1)
@@ -166,6 +192,10 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 		}
 
 		rec, err := t.reader.Read()
+		if errors.Is(err, ringbuf.ErrFlushed) {
+			t.fence.Forward(out)
+			continue
+		}
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) || ctx.Err() != nil {
 				return
@@ -173,32 +203,70 @@ func (t *Tracer) consume(ctx context.Context, out chan<- collector.Event) {
 			continue
 		}
 
-		var raw rawNetEvent
-		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+		raw, err := decodeNetEvent(rec.RawSample)
+		if err != nil {
 			continue
 		}
 
 		detail := model.NetDetail{
-			Op:       opName(raw.Op),
-			Proto:    protoName(raw.Proto),
-			DstIP:    ipv4String(raw.IP4),
-			DstPort:  raw.Port,
-			Bytes:    raw.Bytes,
-			CgroupID: raw.CgroupID,
+			Op:           opName(raw.Op),
+			ConnectState: connectStateName(raw.ConnectState),
+			Proto:        protoName(raw.Proto),
+			DstIP:        addressString(raw.Family, raw.Address),
+			DstPort:      raw.Port,
+			Bytes:        raw.Bytes,
+			CgroupID:     raw.CgroupID,
+			PID:          int(raw.PID),
+			TID:          int(raw.TID),
+			TGID:         int(raw.TGID),
+			KernelTimeNS: raw.TSNS,
 		}
 		b, err := json.Marshal(detail)
 		if err != nil {
 			continue
 		}
 
-		out <- collector.Event{
+		select {
+		case out <- collector.Event{
 			Type:      collector.EventTypeNet,
 			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 			PID:       int(raw.PID),
 			UID:       int(raw.UID),
 			Detail:    b,
+		}:
+		case <-ctx.Done():
+			return
+		case <-t.stopCh:
+			return
 		}
 	}
+}
+
+func decodeNetEvent(sample []byte) (rawNetEvent, error) {
+	var raw rawNetEvent
+	if len(sample) != netEventWireSize {
+		return raw, fmt.Errorf("net event size %d, want %d", len(sample), netEventWireSize)
+	}
+	if sample[0] != 1 {
+		return raw, fmt.Errorf("unsupported net ABI version %d", sample[0])
+	}
+	// Every offset is asserted in _trace.bpf.c. Port and address bytes are
+	// copied from sockaddr unchanged; host scalars use fixed big-endian.
+	raw.ABIVersion = sample[0]
+	raw.Op = sample[1]
+	raw.Family = sample[2]
+	raw.Proto = sample[3]
+	raw.ConnectState = sample[4]
+	copy(raw.Address[:], sample[8:24])
+	raw.Port = binary.BigEndian.Uint16(sample[24:26])
+	raw.TSNS = binary.BigEndian.Uint64(sample[32:40])
+	raw.CgroupID = binary.BigEndian.Uint64(sample[40:48])
+	raw.PID = binary.BigEndian.Uint32(sample[48:52])
+	raw.TID = binary.BigEndian.Uint32(sample[52:56])
+	raw.TGID = binary.BigEndian.Uint32(sample[56:60])
+	raw.UID = binary.BigEndian.Uint32(sample[60:64])
+	raw.Bytes = int64(binary.BigEndian.Uint64(sample[64:72])) //nolint:gosec // Wire ABI encodes signed bytes as two's-complement uint64; preserve the sign bit.
+	return raw, nil
 }
 
 func (t *Tracer) Stop(ctx context.Context) error {
@@ -210,6 +278,7 @@ func (t *Tracer) Stop(ctx context.Context) error {
 	reader := t.reader
 	links := append([]link.Link{}, t.links...)
 	coll := t.coll
+	close(t.stopCh)
 	t.started = false
 	t.mu.Unlock()
 
@@ -261,12 +330,26 @@ func protoName(proto uint8) string {
 	}
 }
 
-func ipv4String(ip uint32) string {
-	if ip == 0 {
+func connectStateName(state uint8) string {
+	switch state {
+	case 1:
+		return "completed"
+	case 2:
+		return "in_progress"
+	default:
 		return ""
 	}
-	b := []byte{byte(ip), byte(ip >> 8), byte(ip >> 16), byte(ip >> 24)} //nolint:gosec // bytes are intentionally truncated from each IPv4 octet.
-	return net.IPv4(b[0], b[1], b[2], b[3]).String()
+}
+
+func addressString(family uint8, address [16]byte) string {
+	switch family {
+	case 2:
+		return net.IP(address[:4]).String()
+	case 10:
+		return net.IP(address[:]).String()
+	default:
+		return ""
+	}
 }
 
 func firstExistingPath(paths ...string) string {
@@ -337,4 +420,18 @@ func uniquePaths(paths []string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+func (t *Tracer) Drain(ctx context.Context) error {
+	t.mu.Lock()
+	reader, fence := t.reader, t.fence
+
+	t.mu.Unlock()
+	if reader == nil || fence == nil {
+		return fmt.Errorf("tracer is not started")
+	}
+	if err := fence.Drain(ctx, reader.Flush); err != nil {
+		return err
+	}
+	return nil
 }

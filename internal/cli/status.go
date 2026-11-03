@@ -21,7 +21,8 @@ type statusRequired struct {
 }
 
 type statusJSON struct {
-	Daemon struct {
+	LateRunLoss []ipc.LateRunLoss `json:"late_run_loss,omitempty"`
+	Daemon      struct {
 		Running      bool   `json:"running"`
 		PID          int    `json:"pid"`
 		UID          int    `json:"uid"`
@@ -100,6 +101,7 @@ func StatusCommand(ctx context.Context, args []string) error {
 		out.Ready = false
 		return writeStatus(out, asJSON)
 	}
+	out.LateRunLoss = st.LateRunLoss
 	out.Daemon.StatusOK = true
 	out.Daemon.PID = st.PID
 	out.Daemon.UID = st.UID
@@ -201,6 +203,9 @@ func writeStatus(s statusJSON, asJSON bool) error {
 	}
 	stdoutf("Socket access: %s\n", sockAccess)
 	stdoutf("Ready:         %s\n", readyWord)
+	for _, loss := range s.LateRunLoss {
+		stdoutf("Late loss:     run=%s process=%d file=%d network=%d\n", loss.RunID, loss.Process, loss.File, loss.Network)
+	}
 	return nil
 }
 

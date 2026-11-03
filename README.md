@@ -178,7 +178,7 @@ Rules:
 - built-in default ruleset is always active (`internal/detect/rules/default_rules.yaml`)
 - optional per-run custom rules can be appended with `logira run --rules <yaml-file>`
 - sample custom rules and trial commands: [`examples/rules/README.md`](examples/rules/README.md)
-- file event retention is rule-driven by file rules; `--watch` is deprecated compatibility only
+- state-changing file evidence is retained; routine opens remain rule-driven; `--watch` is deprecated compatibility only
 
 ## Where Is Data Stored?
 
@@ -226,3 +226,17 @@ Apache License 2.0. See [LICENSE](LICENSE) for details.
 eBPF programs under `collector/linux/` are dual-licensed: Apache-2.0 OR GPL-2.0-only. 
 
 This ensures compatibility with the Linux kernel when loading eBPF programs that require GPL-only helpers.
+### OS observation scope
+
+Ordinary runs record process fork/exec/exit evidence and state-changing file
+operations, while routine file opens remain subject to detection-rule retention.
+Use `logira query --run last --type process` for lifecycle records. Network events
+preserve IPv4/IPv6 destinations and distinguish completed connect syscalls from
+nonblocking attempts. Saved run metadata reports per-category known losses.
+
+Logira provides evidence within its observation scope, not complete Linux
+filesystem or network auditing. Missing events do not prove absence of activity.
+See [event semantics and coverage limitations](docs/jsonl.md#os-observability-additions-run-metadata-version-5).
+Install the daemon and regenerated BPF objects together; older object layouts
+are not compatible with the new loaders. Kernel 5.8+ and architecture portability
+still require privileged runtime validation on the target system.

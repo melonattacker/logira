@@ -170,3 +170,6 @@ func NowUnixNanos() int64 { return time.Now().UTC().UnixNano() }
 func joinErrors(errs []error) error {
 	return errors.Join(errs...)
 }
+
+// Flush makes buffered JSONL write failures visible before final metadata.
+func (s *Store) Flush() error { return s.jsonl.Flush() }
