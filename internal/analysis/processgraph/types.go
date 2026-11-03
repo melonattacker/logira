@@ -65,6 +65,9 @@ type Observation struct {
 	Net      *model.NetDetail
 }
 
+// Resolution.Candidates contains only identities not contradicted by the supplied
+// time and identity fields. Unknown timing can leave candidates unresolved; an
+// exact identity outside its observed lifetime is not a candidate.
 type Resolution struct {
 	TaskID     string
 	Candidates []string

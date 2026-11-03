@@ -215,3 +215,63 @@ func BenchmarkDeepLineage(b *testing.B) {
 		}
 	}
 }
+
+func TestTentativeAncestryLifetimeCompatibility(t *testing.T) {
+	parentExit := ev(2, storage.TypeProcess, model.ProcessDetail{Kind: "exit", TID: 10, TaskStartKernelNS: 10, KernelTimeNS: 50})
+	rekey := ev(2, storage.TypeProcess, model.ProcessDetail{Kind: "exec_rekey", OldPID: 10, TID: 12, TaskStartKernelNS: 10, KernelTimeNS: 50})
+	for _, tc := range []struct {
+		name       string
+		parent     storage.Event
+		extra      []storage.Event
+		childBirth uint64
+		childExec  uint64
+		fork       bool
+		uncertain  int
+	}{
+		{"PPID reused before child exec", ex(1, 10, 10, 20), []storage.Event{ex(2, 10, 60, 70)}, 80, 90, false, 0},
+		{"PPID exited before child exec", ex(1, 10, 10, 20), []storage.Event{parentExit}, 60, 70, false, 0},
+		{"PPID exited before untimed child birth", ex(1, 10, 10, 20), []storage.Event{parentExit}, 60, 0, false, 0},
+		{"PPID rekeyed before child exec", ex(1, 10, 10, 20), []storage.Event{rekey}, 60, 70, false, 0},
+		{"parent born after child", ex(1, 10, 60, 70), nil, 30, 80, false, 0},
+		{"parent born after child exec", ex(1, 10, 60, 70), nil, 30, 40, false, 0},
+		{"child activity survives parent exit", ex(1, 10, 10, 20), []storage.Event{parentExit}, 30, 40, false, 1},
+		{"unknown child timing", ex(1, 10, 10, 20), []storage.Event{parentExit}, 0, 0, false, 1},
+		{"unresolved fork with compatible time", ex(1, 10, 10, 20), []storage.Event{ev(2, storage.TypeExec, model.ExecDetail{TID: 10, TGID: 99, TaskStartKernelNS: 10, KernelTimeNS: 25})}, 30, 40, true, 1},
+		{"unresolved fork after parent exit", ex(1, 10, 10, 20), []storage.Event{parentExit}, 60, 70, true, 0},
+		{"unresolved fork after parent reuse", ex(1, 10, 10, 20), []storage.Event{ex(2, 10, 60, 70)}, 80, 90, true, 0},
+		{"unresolved fork after rekey", ex(1, 10, 10, 20), []storage.Event{rekey}, 60, 70, true, 0},
+		{"unresolved fork before parent birth", ex(1, 10, 60, 70), nil, 30, 40, true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := ex(10, 20, tc.childBirth, tc.childExec)
+			events := append([]storage.Event{tc.parent}, tc.extra...)
+			if tc.fork {
+				events = append(events, fk(9, 10, 20, tc.childBirth, 10))
+			} else {
+				child.PPID = 10
+			}
+			events = append(events, child, file(11, 20, 100), net(12, 20, 101))
+			ep := episodeFor(t, 1, events)
+			if ep.Summary.Processes != 1 || ep.Summary.Execs != 1 {
+				t.Fatalf("tentative ancestry promoted to members: %+v", ep.Summary)
+			}
+			for _, counts := range []Counts{ep.Summary.File, ep.Summary.Network} {
+				want := Counts{Observed: 1, Uncertain: tc.uncertain, Unattributable: 1 - tc.uncertain}
+				if counts != want {
+					t.Fatalf("counts=%+v want=%+v", counts, want)
+				}
+			}
+			if tc.uncertain == 0 && ep.Summary.UnattributableReasons["unresolved_episode_relationship"] != 2 {
+				t.Fatalf("rejected hint is not proof of unrelatedness: %+v", ep.Summary)
+			}
+		})
+	}
+}
+
+func TestUnknownForkTimingPreservesCandidate(t *testing.T) {
+	forkWithoutTime := ev(2, storage.TypeProcess, model.ProcessDetail{Kind: "fork", ParentTID: 10, ParentTaskStartKernelNS: 10, ChildTID: 20})
+	ep := episodeFor(t, 1, []storage.Event{ex(1, 10, 10, 20), forkWithoutTime, file(4, 20, 60)})
+	if ep.Summary.Processes != 1 || ep.Summary.File != (Counts{Observed: 1, Uncertain: 1}) {
+		t.Fatalf("unknown ordering must remain tentative: %+v", ep.Summary)
+	}
+}

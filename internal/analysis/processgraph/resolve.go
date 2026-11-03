@@ -83,6 +83,7 @@ func (g *Graph) Resolve(id Identity, at uint64) Resolution {
 		}
 		bs = all[start:i]
 	}
+	contradictoryTime := !exact && at != 0 && len(bs) == 0 && len(g.byTID[id.TID]) > 0
 	seen := make(map[string]bool)
 	strong := make(map[string]bool)
 	for _, b := range bs {
@@ -90,7 +91,8 @@ func (g *Graph) Resolve(id Identity, at uint64) Resolution {
 			continue
 		}
 		compatible := at == 0 || ((b.start == 0 || at >= b.start) && (b.end == 0 || at < b.end))
-		if !compatible && !exact {
+		if !compatible {
+			contradictoryTime = true
 			continue
 		}
 		seen[b.task.ID] = true
@@ -113,6 +115,8 @@ func (g *Graph) Resolve(id Identity, at uint64) Resolution {
 		r.Reason = "ambiguous_task_identity"
 	} else if len(r.Candidates) == 1 {
 		r.Reason = "insufficient_identity_or_ordering"
+	} else if contradictoryTime {
+		r.Reason = "contradictory_task_lifetime"
 	}
 	return r
 }

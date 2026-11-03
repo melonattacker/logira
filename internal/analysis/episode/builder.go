@@ -179,32 +179,47 @@ func selectLineage(g *processgraph.Graph, root *processgraph.Exec) lineage {
 		}
 	}
 	// PPID is candidate evidence only. It never creates an edge or member.
-	memberTIDs := make(map[int]bool)
-	for id := range l.members {
-		for _, identity := range g.Task(id).Identities {
-			if identity.TID > 0 {
-				memberTIDs[identity.TID] = true
-			}
-		}
-	}
 	for _, o := range g.Observations {
-		if o.Exec != nil && o.Event.PPID > 0 && memberTIDs[o.Event.PPID] {
-			id := g.Execs[o.Event.Seq].TaskID
-			if _, ok := l.members[id]; !ok && !l.outside[id] {
-				l.uncertain[id] = true
+		if o.Exec == nil || o.Event.PPID <= 0 {
+			continue
+		}
+		child := g.Execs[o.Event.Seq].TaskID
+		if _, ok := l.members[child]; ok || l.outside[child] {
+			continue
+		}
+		// PPID was observed at exec, not at a later child's file/net event.
+		// If exec timing is absent, a known child birth still bounds ancestry.
+		at := o.KernelNS
+		if at == 0 {
+			at = o.Identity.Birth
+		}
+		for _, parent := range g.Resolve(processgraph.Identity{TID: o.Event.PPID}, at).Candidates {
+			if _, ok := l.members[parent]; !ok || parent == child {
+				continue
+			}
+			compatible := true
+			for _, identity := range g.Task(parent).Identities {
+				// FirstObserved is not birth: seeing a parent for the first
+				// time after the child's birth does not disprove ancestry.
+				if o.Identity.Birth != 0 && identity.Birth > o.Identity.Birth {
+					compatible = false
+				}
+			}
+			if compatible {
+				l.uncertain[child] = true
 			}
 		}
 	}
 	// Unresolved observed forks may still connect a candidate to a member.
 	// Propagate only uncertainty, never promote these edges into membership.
-	candidateChildren := make(map[string][]string)
+	candidateChildren := make(map[string][]*processgraph.Fork)
 	for _, f := range g.Forks {
 		if f.ParentTaskID != nil {
-			candidateChildren[*f.ParentTaskID] = append(candidateChildren[*f.ParentTaskID], f.ChildTaskID)
+			candidateChildren[*f.ParentTaskID] = append(candidateChildren[*f.ParentTaskID], f)
 			continue
 		}
 		for _, id := range g.Resolve(f.ParentIdentity, f.KernelNS).Candidates {
-			candidateChildren[id] = append(candidateChildren[id], f.ChildTaskID)
+			candidateChildren[id] = append(candidateChildren[id], f)
 		}
 	}
 	queue = queue[:0]
@@ -218,7 +233,11 @@ func selectLineage(g *processgraph.Graph, root *processgraph.Exec) lineage {
 		seen[id] = true
 	}
 	for i := 0; i < len(queue); i++ {
-		for _, child := range candidateChildren[queue[i]] {
+		for _, f := range candidateChildren[queue[i]] {
+			child := f.ChildTaskID
+			if e, member := l.members[queue[i]]; member && !e.wholeLifetime && e.at != 0 && f.KernelNS != 0 && f.KernelNS < e.at {
+				continue
+			}
 			if seen[child] || l.outside[child] {
 				continue
 			}

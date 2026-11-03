@@ -264,3 +264,24 @@ func TestWeakRekeyDoesNotEndFutureReusedTID(t *testing.T) {
 		t.Fatalf("future lifetime invalidated: %+v", r)
 	}
 }
+
+func TestResolutionCandidatesExcludeContradictoryLifetimes(t *testing.T) {
+	g := build(t, execEvent(1, 10, 10, 20), exitEvent(2, 10, 10, 50), execEvent(3, 10, 60, 70))
+	for _, at := range []uint64{5, 50, 80} {
+		r := g.Resolve(Identity{TID: 10, Birth: 10}, at)
+		if r.TaskID != "" || len(r.Candidates) != 0 || r.Reason != "contradictory_task_lifetime" {
+			t.Fatalf("at=%d: contradictory identity retained: %+v", at, r)
+		}
+	}
+	for _, at := range []uint64{5, 55} {
+		r := g.Resolve(Identity{TID: 10}, at)
+		if len(r.Candidates) != 0 || r.Reason != "contradictory_task_lifetime" {
+			t.Fatalf("bare TID outside known intervals at %d: %+v", at, r)
+		}
+	}
+	// No timestamp cannot prove a contradiction, even with observed PID reuse.
+	r := g.Resolve(Identity{TID: 10}, 0)
+	if r.TaskID != "" || len(r.Candidates) != 2 || r.Reason != "ambiguous_task_identity" {
+		t.Fatalf("unknown timing discarded candidates: %+v", r)
+	}
+}

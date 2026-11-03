@@ -76,6 +76,13 @@ before the root exec are excluded. Cgroup equality, shared TGID, executable
 names, PPID guesses, wall-clock windows, and sequence proximity do not establish
 membership. Unknown fork/exec boundary ordering produces uncertainty. Legacy
 PPID links can expose candidates but never create a resolved edge or member.
+Candidates are checked against known lifetime and numerical-identity boundaries
+at the PPID observation or fork, rather than at later child activity. A known
+birth, exit, reuse, or rekey contradiction excludes the candidate; missing
+timing alone does not. Children can still have activity after their parent
+exits. Rejecting a tentative ancestry hint does not establish that a disconnected
+task is unrelated: its activity remains run-scoped and unattributable unless
+other evidence establishes a relationship.
 
 The root can be inspected with missing ancestry. Task lifecycle references may
 predate the root because they establish its identity; only `exec_members`,
