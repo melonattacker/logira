@@ -35,7 +35,7 @@ func TestBPFCollectionSpecs(t *testing.T) {
 
 				// Regression for CVE-2026-10722: overflowing BTF bounds must
 				// return an error, not panic. Mutate a copy, never the artifact.
-				data, err := os.ReadFile(path)
+				data, err := os.ReadFile(path) //nolint:gosec // Paths come from the fixed tracer and byte-order lists above.
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -43,7 +43,11 @@ func TestBPFCollectionSpecs(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer obj.Close()
+				defer func() {
+					if err := obj.Close(); err != nil {
+						t.Errorf("close BPF object: %v", err)
+					}
+				}()
 				btf := obj.Section(".BTF")
 				if btf == nil || btf.Size < 24 {
 					t.Fatal("missing BTF header")
