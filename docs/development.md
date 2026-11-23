@@ -6,7 +6,11 @@ This doc is for contributors.
 
 - Linux kernel 5.8+
 - Root (or appropriate capabilities) to run tracers (via `logirad`)
-- Go 1.22+
+- Go 1.26.0+ (language/module minimum). Use the reviewed Go 1.26.11
+  toolchain for builds; `go.mod` recommends it via `toolchain`, and CI and
+  releases select the exact version in `.go-version`. Keep both pins in sync
+  when reviewing security updates. The minimum alone does not select a patched
+  compiler or standard library. Do not override it with an older local toolchain.
 - clang/llvm to regenerate eBPF objects
 - libbpf development headers to build eBPF programs (e.g. `libbpf-dev` on Ubuntu)
 - Linux UAPI headers (if you see missing `asm/types.h`, install your distro's libc/kernel headers packages)
