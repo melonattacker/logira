@@ -8,11 +8,13 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"structs"
 
 	"github.com/cilium/ebpf"
 )
 
 type traceFdPathKey struct {
+	_        structs.HostLayout
 	Epoch    uint64
 	CgroupId uint64
 	Tgid     uint32
@@ -20,12 +22,14 @@ type traceFdPathKey struct {
 }
 
 type traceFdPathValue struct {
+	_     structs.HostLayout
 	Dirfd int32
 	Flags uint32
 	Path  [256]int8
 }
 
 type traceFileStageCounters struct {
+	_                     structs.HostLayout
 	Enters                uint64
 	Exits                 uint64
 	Emitted               uint64
@@ -37,6 +41,7 @@ type traceFileStageCounters struct {
 }
 
 type tracePendingFileOp struct {
+	_         structs.HostLayout
 	CgroupId  uint64
 	EnterTsNs uint64
 	Kind      uint32
@@ -52,6 +57,57 @@ type tracePendingFileOp struct {
 	Path      [256]int8
 	Path2     [256]int8
 }
+
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	traceMapEvents               = "events"
+	traceMapFdEpochs             = "fd_epochs"
+	traceMapFdPaths              = "fd_paths"
+	traceMapPendingFileOps       = "pending_file_ops"
+	traceMapPendingScratch       = "pending_scratch"
+	traceMapStageCounters        = "stage_counters"
+	traceProgTraceEnterChdir     = "trace_enter_chdir"
+	traceProgTraceEnterClose     = "trace_enter_close"
+	traceProgTraceEnterDup       = "trace_enter_dup"
+	traceProgTraceEnterDup2      = "trace_enter_dup2"
+	traceProgTraceEnterDup3      = "trace_enter_dup3"
+	traceProgTraceEnterFchdir    = "trace_enter_fchdir"
+	traceProgTraceEnterFtruncate = "trace_enter_ftruncate"
+	traceProgTraceEnterOpenat    = "trace_enter_openat"
+	traceProgTraceEnterOpenat2   = "trace_enter_openat2"
+	traceProgTraceEnterPwrite64  = "trace_enter_pwrite64"
+	traceProgTraceEnterRename    = "trace_enter_rename"
+	traceProgTraceEnterRenameat  = "trace_enter_renameat"
+	traceProgTraceEnterRenameat2 = "trace_enter_renameat2"
+	traceProgTraceEnterTruncate  = "trace_enter_truncate"
+	traceProgTraceEnterUnlink    = "trace_enter_unlink"
+	traceProgTraceEnterUnlinkat  = "trace_enter_unlinkat"
+	traceProgTraceEnterWrite     = "trace_enter_write"
+	traceProgTraceEnterWritev    = "trace_enter_writev"
+	traceProgTraceExitChdir      = "trace_exit_chdir"
+	traceProgTraceExitClose      = "trace_exit_close"
+	traceProgTraceExitDup        = "trace_exit_dup"
+	traceProgTraceExitDup2       = "trace_exit_dup2"
+	traceProgTraceExitDup3       = "trace_exit_dup3"
+	traceProgTraceExitFchdir     = "trace_exit_fchdir"
+	traceProgTraceExitFtruncate  = "trace_exit_ftruncate"
+	traceProgTraceExitOpenat     = "trace_exit_openat"
+	traceProgTraceExitOpenat2    = "trace_exit_openat2"
+	traceProgTraceExitPwrite64   = "trace_exit_pwrite64"
+	traceProgTraceExitRename     = "trace_exit_rename"
+	traceProgTraceExitRenameat   = "trace_exit_renameat"
+	traceProgTraceExitRenameat2  = "trace_exit_renameat2"
+	traceProgTraceExitTruncate   = "trace_exit_truncate"
+	traceProgTraceExitUnlink     = "trace_exit_unlink"
+	traceProgTraceExitUnlinkat   = "trace_exit_unlinkat"
+	traceProgTraceExitWrite      = "trace_exit_write"
+	traceProgTraceExitWritev     = "trace_exit_writev"
+	traceProgTraceFdCloseRange   = "trace_fd_close_range"
+	traceProgTraceFdExec         = "trace_fd_exec"
+	traceProgTraceFdFork         = "trace_fd_fork"
+)
 
 // loadTrace returns the embedded CollectionSpec for trace.
 func loadTrace() (*ebpf.CollectionSpec, error) {
@@ -73,7 +129,7 @@ func loadTrace() (*ebpf.CollectionSpec, error) {
 //	*traceMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadTraceObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func loadTraceObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := loadTrace()
 	if err != nil {
 		return err
@@ -88,9 +144,10 @@ func loadTraceObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type traceSpecs struct {
 	traceProgramSpecs
 	traceMapSpecs
+	traceVariableSpecs
 }
 
-// traceSpecs contains programs before they are loaded into the kernel.
+// traceProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type traceProgramSpecs struct {
@@ -147,12 +204,19 @@ type traceMapSpecs struct {
 	StageCounters  *ebpf.MapSpec `ebpf:"stage_counters"`
 }
 
+// traceVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type traceVariableSpecs struct {
+}
+
 // traceObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
 type traceObjects struct {
 	tracePrograms
 	traceMaps
+	traceVariables
 }
 
 func (o *traceObjects) Close() error {
@@ -183,6 +247,12 @@ func (m *traceMaps) Close() error {
 		m.PendingScratch,
 		m.StageCounters,
 	)
+}
+
+// traceVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadTraceObjects or ebpf.CollectionSpec.LoadAndAssign.
+type traceVariables struct {
 }
 
 // tracePrograms contains all programs after they have been loaded into the kernel.
